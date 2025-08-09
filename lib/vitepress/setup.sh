@@ -62,6 +62,18 @@ else
     echo "   ❌ theme/ directory not found at $SCRIPT_DIR/theme"
 fi
 
+# Copy vite.config.js to prevent PostCSS conflicts
+if [ -f "$SCRIPT_DIR/vite.config.js" ]; then
+    cp "$SCRIPT_DIR/vite.config.js" "docs/vite.config.js"
+    echo "   ✅ vite.config.js copied (PostCSS isolation)"
+fi
+
+# Copy postcss.config.js to override parent project's PostCSS config
+if [ -f "$SCRIPT_DIR/postcss.config.js" ]; then
+    cp "$SCRIPT_DIR/postcss.config.js" "docs/postcss.config.js"
+    echo "   ✅ postcss.config.js copied (prevents parent config loading)"
+fi
+
 # Update package.json to include TypeScript dependencies
 echo "📦 Updating package.json with TypeScript support..."
 
