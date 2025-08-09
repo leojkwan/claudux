@@ -1,0 +1,78 @@
+{
+  "project": {
+    "name": "Your Project",
+    "type": "generic",
+    "description": "General project documentation"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 90
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.ts",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev",
+    "sidebar_structure_guide": {
+      "_comment": "Generic template - adapt to your specific project needs",
+      "/": [
+        {
+          "text": "Getting Started",
+          "items": [
+            { "text": "Overview", "link": "/guide/" },
+            { "text": "Installation", "link": "/guide/installation" },
+            { "text": "Quick Start", "link": "/guide/quickstart" }
+          ]
+        },
+        {
+          "text": "User Guide",
+          "items": [
+            { "text": "Core Features", "link": "/features/" },
+            { "text": "Configuration", "link": "/guide/configuration" },
+            { "text": "Best Practices", "link": "/guide/best-practices" }
+          ]
+        },
+        {
+          "text": "Technical Documentation",
+          "items": [
+            { "text": "Architecture", "link": "/technical/" },
+            { "text": "Coding Patterns", "link": "/technical/patterns" },
+            { "text": "API Reference", "link": "/api/" },
+            { "text": "Development", "link": "/development/" }
+          ]
+        },
+        {
+          "text": "Resources",
+          "items": [
+            { "text": "Examples", "link": "/examples/" },
+            { "text": "FAQ", "link": "/faq" },
+            { "text": "Troubleshooting", "link": "/troubleshooting" }
+          ]
+        }
+      ]
+    }
+  },
+  "files": {
+    "instructions": "README.md",
+    "main_config": "package.json",
+    "source_dir": "src"
+  },
+  "features": {
+    "testing": {
+      "enabled": true,
+      "framework": "jest"
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "README.md - Project overview and setup",
+      "Core functionality documentation",
+      "API documentation if applicable",
+      "Configuration and deployment",
+      "Testing and development workflow"
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "project": {
+    "name": "Your Next.js App",
+    "type": "nextjs",
+    "language": "TypeScript",
+    "build_system": "next",
+    "framework": "Next.js 14+",
+    "description": "Full-stack React framework with server-side rendering"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "main_config": "next.config.js",
+    "package_config": "package.json",
+    "app_dir": "app",
+    "pages_dir": "pages",
+    "components_dir": "components",
+    "api_routes": "app/api",
+    "public_dir": "public",
+    "styles_dir": "styles"
+  },
+  "features": {
+    "app_router": true,
+    "server_components": true,
+    "api_routes": true,
+    "testing": {
+      "enabled": true,
+      "framework": "jest",
+      "e2e": "playwright"
+    },
+    "styling": {
+      "primary": "tailwindcss",
+      "css_modules": true
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "App router structure and layouts",
+      "Server vs client components",
+      "API routes and middleware",
+      "Data fetching patterns",
+      "SEO and metadata configuration"
+    ],
+    "preservation_rules": [
+      "Keep existing routing examples",
+      "Preserve SSR/SSG explanations",
+      "Maintain deployment guides"
+    ],
+    "update_triggers": [
+      "New routes in app/ directory",
+      "API endpoint changes",
+      "Component architecture updates",
+      "Build configuration changes"
+    ]
+  }
+}

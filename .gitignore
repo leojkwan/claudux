@@ -1,0 +1,22 @@
+# Generated documentation
+docs/
+
+# Node modules (if VitePress is installed locally)
+node_modules/
+
+# VitePress cache
+.vitepress/cache/
+.vitepress/dist/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Site plan (generated)
+docs-site-plan.json
