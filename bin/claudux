@@ -1,0 +1,96 @@
+#!/bin/bash
+#
+# ClauDux - AI-Powered Documentation Generator
+# Powered by Claude AI and VitePress
+#
+
+# Script setup
+set -euo pipefail
+
+# Get the directory where this script is located
+# This handles both symlinks and direct execution
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    # Script is a symlink, resolve it
+    SCRIPT_PATH="$(readlink "${BASH_SOURCE[0]}")"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+else
+    # Script is not a symlink
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+fi
+
+# Store the directory where the user called the script from
+# This ensures docs are always generated in the user's project root
+WORKING_DIR="$(pwd)"
+
+# Export for use in sourced scripts
+export SCRIPT_DIR
+export WORKING_DIR
+
+# Always work from the directory where the user called the script
+cd "$WORKING_DIR"
+
+# Determine lib directory location
+LIB_DIR="$SCRIPT_DIR/../lib"
+
+# Source all library modules
+source "$LIB_DIR/colors.sh"
+source "$LIB_DIR/project.sh"
+source "$LIB_DIR/content-protection.sh"
+source "$LIB_DIR/claude-utils.sh"
+source "$LIB_DIR/git-utils.sh"
+source "$LIB_DIR/docs-generation.sh"
+source "$LIB_DIR/cleanup.sh"
+source "$LIB_DIR/server.sh"
+source "$LIB_DIR/ui.sh"
+
+# Main function
+main() {
+    case "${1:-}" in
+        "update")
+            show_header
+            check_claude
+            update
+            ;;
+        "clean"|"cleanup")
+            show_header
+            cleanup_docs
+            ;;
+        "recreate")
+            show_header
+            check_claude
+            recreate_docs
+            ;;
+        "serve"|"server"|"dev")
+            show_header
+            serve
+            ;;
+        "create-template"|"template")
+            show_header
+            create_claudux_md
+            ;;
+        "help"|"-h"|"--help")
+            show_header
+            show_help
+            ;;
+        "")
+            # Default action: show interactive menu
+            show_header
+            check_claude
+            show_menu
+            ;;
+        *)
+            # Unknown command
+            show_header
+            print_color "RED" "❌ Unknown command: $1"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Handle errors gracefully
+trap 'echo ""; error_exit "Script interrupted" 130' INT TERM
+
+# Run main function with all arguments
+main "$@" 

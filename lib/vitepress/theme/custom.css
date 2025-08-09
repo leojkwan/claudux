@@ -1,0 +1,335 @@
+/**
+ * Custom VitePress theme enhancements
+ * Optimizes use of real estate and improves visual hierarchy
+ */
+
+/* Enhanced root variables */
+:root {
+  /* Custom brand colors */
+  --vp-c-brand-1: #5f67ee;
+  --vp-c-brand-2: #4c52cc;
+  --vp-c-brand-3: #3940aa;
+  --vp-c-brand-soft: #e8e9ff;
+  
+  /* Enhanced spacing */
+  --vp-layout-max-width: 1440px;
+  --vp-sidebar-width-small: 280px;
+  --vp-sidebar-width-medium: 320px;
+  
+  /* Custom font sizes for better hierarchy */
+  --vp-font-size-xl: 1.125rem;
+  --vp-font-size-2xl: 1.25rem;
+  
+  /* Enhanced shadows */
+  --vp-shadow-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --vp-shadow-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --vp-shadow-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode enhancements */
+.dark {
+  --vp-c-brand-1: #7c83f0;
+  --vp-c-brand-2: #6b73ed;
+  --vp-c-brand-3: #5a63ea;
+  --vp-c-brand-soft: #1a1b2e;
+}
+
+/* Layout optimizations */
+.Layout {
+  max-width: var(--vp-layout-max-width);
+  margin: 0 auto;
+}
+
+/* Enhanced sidebar styling - fix layout issues */
+.VPSidebar {
+  width: var(--vp-sidebar-width-medium) !important;
+  background: var(--vp-c-bg-soft);
+  border-right: 1px solid var(--vp-c-divider);
+  position: fixed !important;
+  top: var(--vp-nav-height);
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+/* Adjust content area to account for fixed sidebar */
+@media (min-width: 768px) {
+  .VPContent {
+    margin-left: var(--vp-sidebar-width-medium) !important;
+  }
+}
+
+.VPSidebarItem .text {
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+  transition: color 0.2s ease;
+}
+
+.VPSidebarItem.level-0 > .item > .link > .text {
+  font-weight: 600;
+  font-size: var(--vp-font-size-xl);
+}
+
+.VPSidebarItem .link:hover .text {
+  color: var(--vp-c-brand-1);
+}
+
+.VPSidebarItem.is-active > .item > .link .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+/* Enhanced sidebar group styling */
+.VPSidebarGroup + .VPSidebarGroup {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--vp-c-divider-light);
+}
+
+.VPSidebarGroup .title {
+  font-weight: 700;
+  font-size: var(--vp-font-size-xl);
+  color: var(--vp-c-text-1);
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+/* Content area optimizations */
+.VPContent {
+  max-width: none;
+  margin: 0;
+}
+
+.VPDoc {
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+
+.VPDoc .container {
+  max-width: 840px;
+}
+
+/* Enhanced navigation bar */
+.VPNav {
+  backdrop-filter: blur(12px);
+  box-shadow: var(--vp-shadow-1);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBar .title {
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+}
+
+.VPNavBarMenu .VPNavBarMenuLink {
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.VPNavBarMenu .VPNavBarMenuLink:hover {
+  color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft);
+}
+
+/* Enhanced search styling */
+.VPNavBarSearch .DocSearch-Button {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  box-shadow: var(--vp-shadow-1);
+}
+
+.VPNavBarSearch .DocSearch-Button:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: var(--vp-shadow-2);
+}
+
+/* Enhanced code blocks */
+.vp-code-group {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--vp-shadow-2);
+  margin: 1.5rem 0;
+}
+
+div[class*="language-"] {
+  border-radius: 8px;
+  margin: 1.25rem 0;
+  overflow: hidden;
+  box-shadow: var(--vp-shadow-1);
+}
+
+/* Enhanced blockquotes */
+.vp-doc blockquote {
+  border-left: 4px solid var(--vp-c-brand-1);
+  border-radius: 0 8px 8px 0;
+  background: var(--vp-c-bg-soft);
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+  box-shadow: var(--vp-shadow-1);
+}
+
+/* Enhanced custom containers */
+.custom-block {
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  box-shadow: var(--vp-shadow-1);
+  overflow: hidden;
+}
+
+.custom-block.tip {
+  border-left: 4px solid var(--vp-c-tip-1);
+}
+
+.custom-block.warning {
+  border-left: 4px solid var(--vp-c-warning-1);
+}
+
+.custom-block.danger {
+  border-left: 4px solid var(--vp-c-danger-1);
+}
+
+/* Enhanced tables */
+.vp-doc table {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--vp-shadow-1);
+  margin: 1.5rem 0;
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc tr:hover {
+  background: var(--vp-c-bg-soft);
+}
+
+/* Enhanced outline (right sidebar) */
+.VPDocAsideOutline .outline-marker {
+  background-color: var(--vp-c-brand-1);
+  opacity: 0.8;
+}
+
+.VPDocAsideOutline .outline-link:hover {
+  color: var(--vp-c-brand-1);
+  transition: color 0.2s ease;
+}
+
+.VPDocAsideOutline .outline-link.active {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+/* Enhanced footer */
+.VPFooter {
+  background: var(--vp-c-bg-soft);
+  border-top: 1px solid var(--vp-c-divider);
+  margin-top: 3rem;
+  padding: 2rem 0;
+}
+
+/* Enhanced page navigation */
+.VPDocFooter {
+  margin-top: 3rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.VPDocFooter .pager-link {
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+  transition: all 0.2s ease;
+  box-shadow: var(--vp-shadow-1);
+}
+
+.VPDocFooter .pager-link:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: var(--vp-shadow-2);
+  transform: translateY(-1px);
+}
+
+/* Responsive enhancements */
+@media (min-width: 960px) {
+  .VPSidebar {
+    width: var(--vp-sidebar-width-medium) !important;
+  }
+  
+  .VPContent.has-sidebar {
+    padding-left: calc(var(--vp-sidebar-width-medium) + 2rem) !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  .VPContent.has-sidebar {
+    padding-right: 2rem !important;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .VPDoc {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  
+  .vp-code-group,
+  div[class*="language-"],
+  .custom-block,
+  .vp-doc table {
+    margin: 1rem 0;
+  }
+}
+
+/* Print styles */
+@media print {
+  .VPNav,
+  .VPSidebar,
+  .VPDocAside {
+    display: none !important;
+  }
+  
+  .VPContent {
+    padding: 0 !important;
+  }
+  
+  .VPDoc {
+    padding: 1rem !important;
+  }
+}
+
+/* Accessibility enhancements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Focus indicators */
+.VPSidebarItem .link:focus-visible,
+.VPNavBarMenuLink:focus-visible,
+.breadcrumb-link:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --vp-c-brand-1: #0000ff;
+    --vp-c-brand-2: #0000cc;
+    --vp-c-brand-3: #000099;
+  }
+  
+  .dark {
+    --vp-c-brand-1: #66b3ff;
+    --vp-c-brand-2: #4da6ff;
+    --vp-c-brand-3: #3399ff;
+  }
+} 

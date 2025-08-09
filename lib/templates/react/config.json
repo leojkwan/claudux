@@ -1,0 +1,67 @@
+{
+  "project": {
+    "name": "React Application",
+    "type": "react",
+    "description": "Documentation template for React applications",
+    "detection": {
+      "priority": 10,
+      "files": ["package.json"],
+      "patterns": ["react", "@types/react"]
+    }
+  },
+  
+  "ai_configuration": {
+    "style_guide": ".ai-docs-style.md",
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  
+  "documentation_structure": {
+    "entry_points": [
+      {
+        "path": "docs/index.md",
+        "title": "React App Overview",
+        "description": "Main entry point for React developers",
+        "covers": ["component_architecture", "state_management", "routing", "styling"]
+      },
+      {
+        "path": "docs/components.md", 
+        "title": "Component Library",
+        "description": "Reusable components and their props",
+        "covers": ["component_patterns", "prop_interfaces", "styling_conventions"]
+      },
+      {
+        "path": "docs/development.md",
+        "title": "Development Guide", 
+        "description": "Local development and build process",
+        "covers": ["dev_server", "hot_reload", "testing", "building"]
+      }
+    ]
+  },
+
+  "protection": {
+    "folders": ["notes/", "private/", ".env*", "secrets/", "build/", "dist/"],
+    "files": ["*.key", "*.pem", "*secret*", "*.env", "*.env.local"],
+    "markers": {
+      "jsx": ["// @docs-ai:ignore", "// @docs-ai:end"],
+      "tsx": ["// @docs-ai:ignore", "// @docs-ai:end"],
+      "js": ["// @docs-ai:ignore", "// @docs-ai:end"],
+      "ts": ["// @docs-ai:ignore", "// @docs-ai:end"],
+      "css": ["/* @docs-ai:ignore */", "/* @docs-ai:end */"],
+      "markdown": ["<!-- @docs-ai:ignore -->", "<!-- @docs-ai:end -->"]
+    }
+  },
+
+  "analysis_focus": [
+    "React component hierarchy and patterns",
+    "State management approach (Redux, Context, etc.)",
+    "Routing configuration and structure", 
+    "Build system and bundling (Webpack, Vite, etc.)",
+    "Testing setup (Jest, React Testing Library)",
+    "Styling approach (CSS Modules, Styled Components, etc.)",
+    "TypeScript configuration and type definitions",
+    "Performance optimization patterns"
+  ]
+} 

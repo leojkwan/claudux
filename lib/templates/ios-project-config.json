@@ -1,0 +1,75 @@
+{
+  "project": {
+    "name": "Your iOS App",
+    "type": "ios",
+    "description": "Your iOS app description",
+    "technologies": ["Swift", "SwiftUI", "SwiftData", "CloudKit", "Tuist"],
+    "version_requirement": "iOS 17+"
+  },
+  
+  "ai_configuration": {
+    "style_guide": ".ai-docs-style.md",
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  
+  "documentation_structure": {
+    "entry_points": [
+      {
+        "path": "docs/guide/index.md",
+        "title": "Getting Started",
+        "description": "Main entry point for new developers",
+        "covers": ["project_overview", "setup_instructions", "architecture_basics"]
+      },
+      {
+        "path": "docs/guide/tuist-setup.md", 
+        "title": "Tuist Setup",
+        "description": "Build system and project generation",
+        "covers": ["tuist_workflow", "target_dependencies", "project_structure"]
+      },
+      {
+        "path": "docs/technical/data-models.md",
+        "title": "Data Models", 
+        "description": "SwiftData/CoreData models and relationships",
+        "covers": ["data_models", "relationships", "persistence"]
+      }
+    ],
+    
+    "focus_areas": [
+      {
+        "category": "build_system",
+        "files": ["Project.swift", "Workspace.swift", "Tuist.swift"],
+        "documentation": ["docs/guide/tuist-setup.md"],
+        "key_concepts": ["targets", "dependencies", "frameworks", "schemes"]
+      },
+      {
+        "category": "data_layer",
+        "files": ["YourApp/Models/*.swift"],
+        "documentation": ["docs/technical/data-models.md"],
+        "key_concepts": ["SwiftData", "CoreData", "relationships", "migration"]
+      },
+      {
+        "category": "architecture",
+        "files": ["YourAppCore/**/*.swift", "YourAppApp.swift"],
+        "documentation": ["docs/guide/index.md"],
+        "key_concepts": ["dependency_injection", "observable_viewmodels", "framework_structure"]
+      },
+      {
+        "category": "testing",
+        "files": ["*Tests/**/*.swift"],
+        "documentation": ["docs/technical/testing.md"],
+        "key_concepts": ["unit_tests", "snapshot_tests", "ui_tests", "ci_cd"]
+      }
+    ]
+  },
+
+  "documentation_framework": {
+    "type": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  }
+} 

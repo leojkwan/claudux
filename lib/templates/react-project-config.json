@@ -1,0 +1,58 @@
+{
+  "project": {
+    "name": "Your React App",
+    "type": "react",
+    "language": "TypeScript",
+    "build_system": "vite",
+    "architecture": "React + Next.js",
+    "node_version": "18+",
+    "description": "React web application"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 90
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "instructions": "claude.md",
+    "main_config": "package.json",
+    "build_config": "vite.config.ts",
+    "components_dir": "src/components",
+    "hooks_dir": "src/hooks",
+    "test_files": ["**/*.test.ts", "**/*.test.tsx"]
+  },
+  "features": {
+    "testing": {
+      "enabled": true,
+      "framework": "vitest",
+      "e2e": "playwright",
+      "test_command": "npm run test"
+    },
+    "ci_cd": {
+      "enabled": true,
+      "platform": "github_actions",
+      "scripts_dir": ".github/workflows"
+    },
+    "package_management": {
+      "primary": "npm",
+      "secondary": ["yarn", "pnpm"]
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "package.json - Dependencies and scripts",
+      "Component architecture - React patterns", 
+      "Hooks and state management",
+      "Testing strategy - Unit, integration, e2e",
+      "Build and deployment configuration"
+    ]
+  }
+} 

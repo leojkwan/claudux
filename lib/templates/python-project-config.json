@@ -1,0 +1,58 @@
+{
+  "project": {
+    "name": "Your Python Project",
+    "type": "python",
+    "language": "Python",
+    "build_system": "poetry",
+    "architecture": "FastAPI + SQLModel",
+    "python_version": "3.11+",
+    "description": "Python application or library"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 90
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "instructions": "claude.md",
+    "main_config": "pyproject.toml",
+    "requirements": "requirements.txt",
+    "source_dir": "src",
+    "models_dir": "src/models",
+    "test_files": ["tests/**/*.py"]
+  },
+  "features": {
+    "testing": {
+      "enabled": true,
+      "framework": "pytest",
+      "coverage": "pytest-cov",
+      "test_command": "pytest"
+    },
+    "ci_cd": {
+      "enabled": true,
+      "platform": "github_actions",
+      "scripts_dir": ".github/workflows"
+    },
+    "package_management": {
+      "primary": "poetry",
+      "secondary": ["pip", "pipenv"]
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "pyproject.toml - Dependencies and build config",
+      "Package structure - Module organization", 
+      "API design - Routes and models",
+      "Testing strategy - Unit and integration tests",
+      "Deployment configuration"
+    ]
+  }
+} 

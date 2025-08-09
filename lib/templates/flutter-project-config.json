@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "Your Flutter App",
+    "type": "flutter",
+    "language": "Dart",
+    "build_system": "flutter",
+    "framework": "Flutter 3+",
+    "dart_version": "3.0+",
+    "description": "Cross-platform mobile application"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "pubspec": "pubspec.yaml",
+    "main_file": "lib/main.dart",
+    "lib_dir": "lib",
+    "screens_dir": "lib/screens",
+    "widgets_dir": "lib/widgets",
+    "models_dir": "lib/models",
+    "services_dir": "lib/services",
+    "test_dir": "test",
+    "assets_dir": "assets"
+  },
+  "features": {
+    "platforms": {
+      "ios": true,
+      "android": true,
+      "web": true,
+      "desktop": false
+    },
+    "state_management": {
+      "primary": "riverpod/bloc/provider"
+    },
+    "testing": {
+      "enabled": true,
+      "widget_tests": true,
+      "integration_tests": true,
+      "golden_tests": true
+    },
+    "navigation": {
+      "type": "go_router"
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "Widget tree structure and composition",
+      "State management patterns",
+      "Navigation and routing",
+      "Platform-specific implementations",
+      "Custom widgets and themes"
+    ],
+    "preservation_rules": [
+      "Keep existing widget examples",
+      "Preserve platform-specific guides",
+      "Maintain architecture patterns"
+    ],
+    "update_triggers": [
+      "New screens or widgets",
+      "State management changes",
+      "Navigation updates",
+      "Package additions",
+      "Platform configurations"
+    ]
+  }
+}

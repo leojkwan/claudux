@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "Your Android App",
+    "type": "android",
+    "language": "Kotlin",
+    "build_system": "gradle",
+    "framework": "Android SDK",
+    "min_sdk": "24",
+    "target_sdk": "34",
+    "description": "Native Android application"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "build_gradle_app": "app/build.gradle.kts",
+    "build_gradle_root": "build.gradle.kts",
+    "manifest": "app/src/main/AndroidManifest.xml",
+    "main_activity": "app/src/main/java/com/example/app/MainActivity.kt",
+    "src_dir": "app/src/main/java",
+    "res_dir": "app/src/main/res",
+    "test_dir": "app/src/test",
+    "androidTest_dir": "app/src/androidTest"
+  },
+  "features": {
+    "ui_framework": {
+      "primary": "compose",
+      "xml_layouts": false
+    },
+    "architecture": {
+      "pattern": "MVVM",
+      "components": ["ViewModel", "LiveData", "Room", "Navigation"]
+    },
+    "testing": {
+      "enabled": true,
+      "unit_tests": "junit",
+      "ui_tests": "espresso/compose-test"
+    },
+    "dependencies": {
+      "injection": "hilt/koin",
+      "networking": "retrofit",
+      "image_loading": "coil"
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "Jetpack Compose UI components",
+      "MVVM architecture implementation",
+      "Navigation patterns",
+      "Dependency injection setup",
+      "Material Design 3 guidelines"
+    ],
+    "preservation_rules": [
+      "Keep existing Compose examples",
+      "Preserve architecture documentation",
+      "Maintain testing guides"
+    ],
+    "update_triggers": [
+      "New screens or composables",
+      "ViewModel changes",
+      "Navigation graph updates",
+      "Gradle dependency changes",
+      "API level updates"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "project": {
+    "name": "Your Rust Project",
+    "type": "rust",
+    "language": "Rust",
+    "build_system": "cargo",
+    "architecture": "Axum + SeaORM",
+    "rust_version": "1.70+",
+    "description": "Rust application or library"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet", 
+    "default_mode": "interactive",
+    "timeout_seconds": 90
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev",
+    "sidebar_structure": {
+      "/": [
+        {
+          "text": "Getting Started",
+          "items": [
+            { "text": "Overview", "link": "/guide/" },
+            { "text": "Installation", "link": "/guide/installation" },
+            { "text": "Quick Start", "link": "/guide/quickstart" }
+          ]
+        },
+        {
+          "text": "Core Concepts",
+          "items": [
+            { "text": "Project Structure", "link": "/guide/structure" },
+            { "text": "Cargo Workspace", "link": "/guide/workspace" },
+            { "text": "Dependencies", "link": "/guide/dependencies" }
+          ]
+        },
+        {
+          "text": "API Reference",
+          "items": [
+            { "text": "Modules", "link": "/api/" },
+            { "text": "Traits", "link": "/api/traits" },
+            { "text": "Structs", "link": "/api/structs" }
+          ]
+        },
+        {
+          "text": "Testing",
+          "items": [
+            { "text": "Unit Tests", "link": "/testing/unit" },
+            { "text": "Integration Tests", "link": "/testing/integration" },
+            { "text": "Benchmarks", "link": "/testing/benchmarks" }
+          ]
+        }
+      ]
+    }
+  },
+  "files": {
+    "instructions": "claude.md",
+    "main_config": "Cargo.toml",
+    "workspace_config": "Cargo.toml",
+    "source_dir": "src",
+    "models_dir": "src/models",
+    "test_files": ["src/**/*.rs", "tests/**/*.rs"]
+  },
+  "features": {
+    "testing": {
+      "enabled": true,
+      "framework": "cargo_test",
+      "benchmark": "criterion",
+      "test_command": "cargo test"
+    },
+    "ci_cd": {
+      "enabled": true,
+      "platform": "github_actions",
+      "scripts_dir": ".github/workflows"
+    },
+    "package_management": {
+      "primary": "cargo",
+      "secondary": ["crates.io"]
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "Cargo.toml - Dependencies and workspace config",
+      "Module structure - Crate organization", 
+      "API design - Routes and handlers",
+      "Testing strategy - Unit, integration, and doc tests",
+      "Performance and memory safety"
+    ]
+  }
+} 
