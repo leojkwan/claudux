@@ -164,26 +164,26 @@ show_menu() {
     PS3="Select (1-7): "
     
     select choice in \
-        "Update documentation (analyze codebase & generate docs)" \
-        "Start documentation server" \
-        "Generate claudux.md from codebase analysis" \
+        "Generate/Update documentation (analyze codebase & create docs)" \
+        "Start documentation server (view existing docs)" \
+        "Generate claudux.md patterns file (coding conventions only)" \
         "Show help and tips" \
         "Clean obsolete files only" \
-        "Recreate docs (start fresh)" \
+        "Recreate docs (delete all & start fresh)" \
         "Exit"
     do
         case $choice in
-            "Update documentation (analyze codebase & generate docs)")
+            "Generate/Update documentation (analyze codebase & create docs)")
                 echo ""
                 update
                 break
                 ;;
-            "Start documentation server")
+            "Start documentation server (view existing docs)")
                 echo ""
                 serve
                 break
                 ;;
-            "Generate claudux.md from codebase analysis")
+            "Generate claudux.md patterns file (coding conventions only)")
                 echo ""
                 create_claudux_md
                 break
@@ -198,7 +198,7 @@ show_menu() {
                 cleanup_docs
                 break
                 ;;
-            "Recreate docs (start fresh)")
+            "Recreate docs (delete all & start fresh)")
                 echo ""
                 recreate_docs
                 break
