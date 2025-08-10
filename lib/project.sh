@@ -34,6 +34,9 @@ detect_project_type() {
     # iOS/Swift project
     if [[ -f "Project.swift" ]] || [[ -n "$(find . -maxdepth 1 -name "*.xcodeproj" -o -name "*.xcworkspace" 2>/dev/null | head -1)" ]]; then
         echo "ios"
+    # Next.js project (check before React)
+    elif [[ -f "next.config.js" ]] || [[ -f "next.config.mjs" ]] || [[ -f "next.config.ts" ]] || ([[ -f "package.json" ]] && grep -q '"next"' package.json 2>/dev/null); then
+        echo "nextjs"
     # React project
     elif [[ -f "package.json" ]] && grep -q '"react"' package.json 2>/dev/null; then
         echo "react"

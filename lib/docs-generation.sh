@@ -19,9 +19,13 @@ build_generation_prompt() {
         fi
     done
     
-    # Template configuration
+    # Template configuration (support both directory and file naming styles)
     if [[ -f "$LIB_DIR/templates/${project_type}/config.json" ]]; then
         template_config="$LIB_DIR/templates/${project_type}/config.json"
+    elif [[ -f "$LIB_DIR/templates/${project_type}-project-config.json" ]]; then
+        template_config="$LIB_DIR/templates/${project_type}-project-config.json"
+    elif [[ -f "$LIB_DIR/templates/${project_type}-config.json" ]]; then
+        template_config="$LIB_DIR/templates/${project_type}-config.json"
     elif [[ -f "$LIB_DIR/templates/generic/config.json" ]]; then
         template_config="$LIB_DIR/templates/generic/config.json"
     fi
@@ -101,13 +105,13 @@ build_generation_prompt() {
    - List any OBSOLETE files with 95%+ confidence
    - Show the final documentation structure
 
-5. **Generate VitePress Configuration**:
+ 5. **Generate VitePress Configuration**:
    - Create docs/.vitepress/config.ts based on your analysis
    - Auto-detect project name, description from package.json/README
    - For mobile apps, find and use app icon from Assets/Resources
-   - Build sidebar structure matching your planned documentation
-   - Include proper navigation categories
-   - Set up social links based on detected repository
+    - Build sidebar structure matching your planned documentation
+    - Include proper navigation categories
+    - Set up social links based on detected repository
    - Enable 3-column layout with outline configuration
    - Import the custom theme: \`import { defineConfig } from 'vitepress'\`
    - Reference config.template.ts for VitePress config structure
@@ -124,7 +128,7 @@ build_generation_prompt() {
    - Logo path if found
    - Clean URLs enabled
 
-6. **Validate All Links**:
+ 6. **Validate All Links**:
    CRITICAL: Every link in config.ts MUST correspond to a file you plan to create!
    - For each sidebar item link (e.g., '/guide/setup'), ensure you're creating 'guide/setup.md'
    - For hash links (e.g., '/guide/setup#installation'), ensure that heading exists
@@ -132,7 +136,12 @@ build_generation_prompt() {
    - Use '/guide/' for index pages (maps to '/guide/index.md')
    - NO broken links allowed - this is a quality gate
 
-IMPORTANT: The config.ts must have zero broken links. Cross-check every link against your planned files.
+ IMPORTANT: The config.ts must have zero broken links. Cross-check every link against your planned files.
+
+ Platform guardrails:
+ - For non-iOS projects, DO NOT include iOS-specific concepts, links, or pages (e.g., Tuist, SwiftData, CloudKit, App Store, TestFlight, Xcode). Only include them for `project_type=ios`.
+ - Resources menu must include only links with absolute URLs you can determine (e.g., detected GitHub repo). Do not add placeholder links like '#'.
+ - The nav must only include sections for which you will create pages (e.g., omit '/technical/' if you are not creating 'docs/technical/index.md').
 
 Output your complete analysis and plan, then proceed to Phase 2.
 
@@ -213,20 +222,69 @@ update() {
     local progress_pid=$(show_progress 15 45)
     
     # Build the prompt
+    info "📝 Building prompt for $PROJECT_TYPE project..."
     load_project_config
+    
+    # Debug project config
+    info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
+    
     local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME")
     
-    # Run Claude
-    claude \
-        --print \
-        --verbose \
-        --model "$model" \
-        --allowedTools "Read,Write,Edit,Delete" \
-        --permission-mode acceptEdits \
-        --debug \
-        "$prompt"
+    # Check if prompt was built successfully
+    if [[ -z "$prompt" ]]; then
+        error "❌ Failed to build generation prompt"
+        warn "   PROJECT_TYPE: $PROJECT_TYPE"
+        warn "   PROJECT_NAME: $PROJECT_NAME"
+        warn "   Working directory: $(pwd)"
+        error_exit "Cannot continue without a valid prompt"
+    else
+        success "✅ Prompt built successfully (${#prompt} chars)"
+    fi
     
-    local claude_exit_code=$?
+    # Run Claude
+    echo "" # Ensure clean line before Claude output
+    info "🚀 Starting documentation generation..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Save prompt for debugging
+    echo "$prompt" > /tmp/claudux-prompt.txt
+    
+    set +e  # Temporarily disable exit on error
+    
+    # Run Claude with real-time output (no buffering)
+    if command -v stdbuf &> /dev/null; then
+        # Use stdbuf to disable output buffering for real-time display
+        stdbuf -o0 -e0 claude \
+            --print \
+            --model "$model" \
+            --allowedTools "Read,Write,Edit,Delete" \
+            --permission-mode acceptEdits \
+            "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+    else
+        # Fallback without stdbuf
+        claude \
+            --print \
+            --model "$model" \
+            --allowedTools "Read,Write,Edit,Delete" \
+            --permission-mode acceptEdits \
+            "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+    fi
+    
+    local claude_exit_code=${PIPESTATUS[0]}
+    set -e  # Re-enable exit on error
+    
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Log Claude invocation result
+    if [[ $claude_exit_code -ne 0 ]]; then
+        error "❌ Claude CLI exited with code: $claude_exit_code"
+        if [[ -f /tmp/claudux-claude.log ]]; then
+            warn "📋 Last output from Claude:"
+            tail -20 /tmp/claudux-claude.log | sed 's/^/   /'
+        fi
+    fi
     
     # Kill the progress indicator
     kill $progress_pid 2>/dev/null
@@ -241,8 +299,15 @@ update() {
         # Validate links in generated documentation
         info "🔍 Step 3: Validating documentation links..."
         if [[ -f "$LIB_DIR/validate-links.sh" ]]; then
+            set +e
             "$LIB_DIR/validate-links.sh"
+            VALIDATE_EXIT=$?
+            set -e
             echo ""
+            if [[ $VALIDATE_EXIT -ne 0 ]]; then
+                error "❌ Link validation failed. Documentation contains broken links."
+                error_exit "Please re-run 'claudux update' after addressing the reported paths."
+            fi
         fi
         
         # Show detailed change summary
@@ -250,6 +315,23 @@ update() {
         show_detailed_changes
         
     else
-        error_exit "Claude Code failed with exit code $claude_exit_code\n\n🔧 Troubleshooting:\n• Check internet connection\n• Try with different model: FORCE_MODEL=sonnet ./claudux\n• Check Claude Code auth: claude config get" "$claude_exit_code"
+        error "Claude Code failed with exit code $claude_exit_code"
+        echo ""
+        warn "🔧 Troubleshooting steps:"
+        echo "   1. Check Claude CLI is authenticated:"
+        echo "      claude config get"
+        echo ""
+        echo "   2. Try with a different model:"
+        echo "      FORCE_MODEL=sonnet claudux update"
+        echo ""
+        echo "   3. Check internet connection"
+        echo ""
+        echo "   4. View full log:"
+        echo "      cat /tmp/claudux-claude.log"
+        echo ""
+        echo "   5. Report issue:"
+        echo "      https://github.com/anthropics/claude-code/issues"
+        
+        exit "$claude_exit_code"
     fi
 }
