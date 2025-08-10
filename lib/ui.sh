@@ -32,15 +32,20 @@ create_claudux_md() {
     # Get model settings
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
     
-    # Detect project type and template reference
+    # Detect project type and select an appropriate reference template
     local template_file
     case "$PROJECT_TYPE" in
         "ios")
             template_file="$LIB_DIR/templates/ios-claudux.md"
             ;;
+        "nextjs")
+            template_file="$LIB_DIR/templates/nextjs-claudux.md"
+            ;;
+        "react"|"javascript"|"nodejs")
+            template_file="$LIB_DIR/templates/generic-claudux.md"
+            ;;
         *)
-            print_color "YELLOW" "⚠️  Using iOS template as reference"
-            template_file="$LIB_DIR/templates/ios-claudux.md"  # Default to iOS for now
+            template_file="$LIB_DIR/templates/generic-claudux.md"
             ;;
     esac
     
@@ -157,60 +162,103 @@ show_help() {
 
 # Interactive menu system
 show_menu() {
-    echo "Choose an option:"
+    # Check if docs exist to determine menu type
+    local has_docs=false
+    if [[ -d "docs" ]] && [[ -f "docs/index.md" ]] && [[ $(ls -A docs/*.md 2>/dev/null | wc -l) -gt 1 ]]; then
+        has_docs=true
+    fi
+    
+    if [[ "$has_docs" == "false" ]]; then
+        # First run menu - no docs yet
+        echo "Select:"
+        echo ""
+        
+        PS3="> "
+        
+        select choice in \
+            "Generate docs (AI → VitePress)" \
+            "Serve (localhost:5173)" \
+            "Generate claudux.md (patterns doc)" \
+            "Recreate (rm -rf docs/)" \
+            "Exit"
+        do
+            case $choice in
+                "Generate docs (AI → VitePress)")
+                    echo ""
+                    update
+                    break
+                    ;;
+                "Serve (localhost:5173)")
+                    echo ""
+                    serve
+                    break
+                    ;;
+                "Generate claudux.md (patterns doc)")
+                    echo ""
+                    create_claudux_md
+                    break
+                    ;;
+                "Recreate (rm -rf docs/)")
+                    echo ""
+                    recreate_docs
+                    break
+                    ;;
+                "Exit")
+                    echo ""
+                    exit 0
+                    ;;
+                *)
+                    print_color "RED" "Invalid"
+                    ;;
+            esac
+        done
+    else
+        # Existing project menu - docs present
+        echo "Select:"
+        echo ""
+        
+        PS3="> "
+        
+        select choice in \
+            "Update docs" \
+            "Serve (localhost:5173)" \
+            "Clean obsolete (≥95% conf)" \
+            "Recreate (rm -rf docs/)" \
+            "Exit"
+        do
+            case $choice in
+                "Update docs")
+                    echo ""
+                    update
+                    break
+                    ;;
+                "Serve (localhost:5173)")
+                    echo ""
+                    serve
+                    break
+                    ;;
+                "Clean obsolete (≥95% conf)")
+                    echo ""
+                    cleanup_docs
+                    break
+                    ;;
+                "Recreate (rm -rf docs/)")
+                    echo ""
+                    recreate_docs
+                    break
+                    ;;
+                "Exit")
+                    echo ""
+                    exit 0
+                    ;;
+                *)
+                    print_color "RED" "Invalid"
+                    ;;
+            esac
+        done
+    fi
+    
+    # Footer hint
     echo ""
-    
-    # Set PS3 for select prompt
-    PS3="Select (1-7): "
-    
-    select choice in \
-        "Generate/Update documentation (analyze codebase & create docs)" \
-        "Start documentation server (view existing docs)" \
-        "Generate claudux.md patterns file (coding conventions only)" \
-        "Show help and tips" \
-        "Clean obsolete files only" \
-        "Recreate docs (delete all & start fresh)" \
-        "Exit"
-    do
-        case $choice in
-            "Generate/Update documentation (analyze codebase & create docs)")
-                echo ""
-                update
-                break
-                ;;
-            "Start documentation server (view existing docs)")
-                echo ""
-                serve
-                break
-                ;;
-            "Generate claudux.md patterns file (coding conventions only)")
-                echo ""
-                create_claudux_md
-                break
-                ;;
-            "Show help and tips")
-                echo ""
-                show_help
-                break
-                ;;
-            "Clean obsolete files only")
-                echo ""
-                cleanup_docs
-                break
-                ;;
-            "Recreate docs (delete all & start fresh)")
-                echo ""
-                recreate_docs
-                break
-                ;;
-            "Exit")
-                echo ""
-                echo "👋 Goodbye!"
-                exit 0
-                ;;
-            *)
-                print_color "RED" "❌ Invalid option. Please choose 1-7."
-                ;;
-        esac
-    done
+    echo "→ ./claudux --help"
 }

@@ -1,8 +1,9 @@
+/* @ts-nocheck */
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Resplit',
-  description: 'Resplit - iOS app documentation',
+  title: '{{PROJECT_NAME}}',
+  description: '{{PROJECT_DESCRIPTION}}',
   
   // Enhanced head configuration
   head: [
@@ -10,10 +11,10 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#5f67ee' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'en' }],
-    ['meta', { property: 'og:title', content: 'Resplit iOS | Receipt Splitting Made Simple' }],
-    ['meta', { property: 'og:site_name', content: 'Resplit iOS Docs' }],
+    ['meta', { property: 'og:title', content: '{{PROJECT_NAME}} Documentation' }],
+    ['meta', { property: 'og:site_name', content: '{{PROJECT_NAME}} Docs' }],
     ['meta', { property: 'og:image', content: '/og-image.png' }],
-    ['meta', { property: 'og:url', content: 'https://resplit-docs.dev/' }],
+    ['meta', { property: 'og:url', content: '/' }],
   ],
 
   // Clean URLs
@@ -31,26 +32,27 @@ export default defineConfig({
   // Theme configuration with enhanced sidebar and navigation
   themeConfig: {
     // Site branding - auto-detected logo
-    logo: { src: '/logo.jpg', width: 24, height: 24 },
-    siteTitle: 'Resplit',
+    logo: { src: '{{LOGO_PATH}}', width: 24, height: 24 },
+    siteTitle: '{{PROJECT_NAME}}',
 
-    // Enhanced navigation bar
+    // Navigation bar (keep minimal and project-agnostic by default)
     nav: [
-      { text: 'Guide', link: '/guide/', activeMatch: '/guide/' },
-      { text: 'Technical', link: '/technical/', activeMatch: '/technical/' },
-      { text: 'Features', link: '/features/', activeMatch: '/features/' },
-      {
-        text: 'Resources',
-        items: [
-          { text: 'GitHub', link: 'https://github.com/your-org/resplit-ios' },
-          { text: 'App Store', link: 'https://apps.apple.com/app/resplit' },
-          { text: 'TestFlight', link: 'https://testflight.apple.com/join/resplit' }
-        ]
-      }
+      { text: 'Guide', link: '/guide/', activeMatch: '/guide/' }
     ],
 
-    // Comprehensive sidebar with proper grouping
+    // Sidebar keeps only generic, always-present sections by default
     sidebar: {
+      '/': [
+        {
+          text: '🚀 Getting Started',
+          collapsed: false,
+          items: [
+            { text: 'Introduction', link: '/guide/' },
+            { text: 'Installation', link: '/guide/#installation' },
+            { text: 'Quick Start', link: '/guide/#quick-start' }
+          ]
+        }
+      ],
       '/guide/': [
         {
           text: '🚀 Getting Started',
@@ -60,52 +62,17 @@ export default defineConfig({
             { text: 'Installation', link: '/guide/#installation' },
             { text: 'Quick Start', link: '/guide/#quick-start' }
           ]
-        },
-        {
-          text: '🔧 Development Setup',
-          collapsed: false,
-          items: [
-            { text: 'Tuist Build System', link: '/guide/tuist-setup' },
-            { text: 'Environment Setup', link: '/guide/tuist-setup#environment-setup' },
-            { text: 'Project Generation', link: '/guide/tuist-setup#project-generation' }
-          ]
-        }
-      ],
-      '/technical/': [
-        {
-          text: '📊 Core Architecture',
-          collapsed: false,
-          items: [
-            { text: 'Overview', link: '/technical/' },
-            { text: 'Data Models', link: '/technical/data-models' },
-            { text: 'SwiftData Schema', link: '/technical/data-models#swiftdata-schema' },
-            { text: 'CloudKit Integration', link: '/technical/data-models#cloudkit-sync' }
-          ]
-        },
-        {
-          text: '🧪 Testing & Quality',
-          collapsed: false,
-          items: [
-            { text: 'Testing Overview', link: '/technical/testing/' },
-            { text: 'Emerge Tools', link: '/technical/testing/emerge-tools' },
-            { text: 'Snapshot Testing', link: '/technical/testing/emerge-tools#snapshot-testing' },
-            { text: 'Performance Testing', link: '/technical/testing/emerge-tools#performance-testing' }
-          ]
         }
       ]
     },
 
-    // Enhanced social links
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/your-org/resplit-ios' },
-      { icon: 'twitter', link: 'https://twitter.com/resplit_app' },
-      { icon: 'discord', link: 'https://discord.gg/resplit' }
-    ],
+    // Enhanced social links (left empty by default; generator may populate)
+    socialLinks: [],
 
     // Footer configuration
     footer: {
-      message: 'Built with ❤️ for the iOS community',
-      copyright: 'Copyright © 2024 Resplit Team'
+      message: 'Generated with Claudux',
+      copyright: 'Copyright © 2024 {{PROJECT_NAME}}'
     },
 
     // Enhanced search
@@ -142,8 +109,8 @@ export default defineConfig({
 
     // Enhanced edit link
     editLink: {
-      pattern: 'https://github.com/your-org/resplit-ios/edit/main/docs/:path',
-      text: 'Edit this page on GitHub'
+      pattern: '#',
+      text: 'Edit this page'
     },
 
     // Last updated timestamp
@@ -187,7 +154,7 @@ export default defineConfig({
 
   // Sitemap generation
   sitemap: {
-    hostname: 'https://resplit-docs.dev'
+    hostname: 'https://localhost:5173'
   },
 
   // PWA support
@@ -197,8 +164,8 @@ export default defineConfig({
   //   scope: '/',
   //   includeAssets: ['favicon.ico'],
   //   manifest: {
-  //     name: 'Resplit iOS Documentation',
-  //     short_name: 'Resplit Docs',
+  //     name: '{{PROJECT_NAME}} Documentation',
+  //     short_name: '{{PROJECT_NAME}} Docs',
   //     theme_color: '#5f67ee',
   //     icons: [
   //       {

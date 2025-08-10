@@ -87,14 +87,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
         text = 'Data Models'
         icon = '📊'
         break
-      case 'tuist-setup':
-        text = 'Tuist Setup'
-        icon = '🔧'
-        break
-      case 'emerge-tools':
-        text = 'Emerge Tools'
-        icon = '📈'
-        break
+      // keep mapping minimal and platform-agnostic
       default:
         // Convert kebab-case to Title Case
         text = segments[i]

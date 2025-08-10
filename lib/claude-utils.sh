@@ -61,3 +61,70 @@ show_progress() {
     
     echo $!  # Return PID for later cleanup
 }
+
+# Format Claude's output for better readability
+format_claude_output() {
+    local file_count=0
+    local current_file=""
+    
+    while IFS= read -r line; do
+        # Detect file operations
+        if [[ "$line" =~ Writing.*to[[:space:]]+(.*) ]]; then
+            current_file="${BASH_REMATCH[1]}"
+            ((file_count++))
+            printf "\r\033[K✅ Created [%d]: %s\n" "$file_count" "$current_file"
+        elif [[ "$line" =~ Creating[[:space:]]+(.*) ]]; then
+            current_file="${BASH_REMATCH[1]}"
+            ((file_count++))
+            printf "\r\033[K📝 Creating [%d]: %s\n" "$file_count" "$current_file"
+        elif [[ "$line" =~ Reading[[:space:]]+(.*) ]]; then
+            current_file="${BASH_REMATCH[1]}"
+            printf "\r\033[K🔍 Analyzing: %s" "$current_file"
+        elif [[ "$line" =~ Updating[[:space:]]+(.*) ]]; then
+            current_file="${BASH_REMATCH[1]}"
+            ((file_count++))
+            printf "\r\033[K📝 Updated [%d]: %s\n" "$file_count" "$current_file"
+        elif [[ "$line" =~ Deleting[[:space:]]+(.*) ]]; then
+            current_file="${BASH_REMATCH[1]}"
+            ((file_count++))
+            printf "\r\033[K🗑️  Removed [%d]: %s\n" "$file_count" "$current_file"
+        elif [[ "$line" =~ "Phase 1:" ]]; then
+            echo ""
+            echo "━━━ Phase 1: Analysis & Planning ━━━"
+        elif [[ "$line" =~ "Phase 2:" ]]; then
+            echo ""
+            echo "━━━ Phase 2: Documentation Generation ━━━"
+        elif [[ "$line" =~ "Error:" ]] || [[ "$line" =~ "error:" ]]; then
+            echo "❌ $line"
+        elif [[ "$line" =~ "Warning:" ]] || [[ "$line" =~ "warning:" ]]; then
+            echo "⚠️  $line"
+        elif [[ "$line" =~ "Success:" ]] || [[ "$line" =~ "Complete" ]]; then
+            echo "✅ $line"
+        elif [[ "$line" =~ ^[[:space:]]*$ ]]; then
+            # Skip empty lines to reduce noise
+            :
+        elif [[ "$line" =~ "Tool Use:" ]] || [[ "$line" =~ "Using tool:" ]]; then
+            # Skip tool use messages to reduce noise
+            :
+        elif [[ "$line" =~ "Assistant:" ]]; then
+            # Skip assistant markers
+            :
+        else
+            # For other important messages, show them dimmed
+            if [[ ${#line} -gt 80 ]]; then
+                # Truncate long lines
+                echo "   ${line:0:77}..."
+            elif [[ -n "$line" ]]; then
+                echo "   $line"
+            fi
+        fi
+    done
+    
+    # Clear the progress line
+    printf "\r\033[K"
+    
+    if [[ $file_count -gt 0 ]]; then
+        echo ""
+        success "📚 Processed $file_count files"
+    fi
+}

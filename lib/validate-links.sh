@@ -11,19 +11,33 @@ if [ ! -d "docs" ]; then
     exit 1
 fi
 
-# Check if config.ts exists
-if [ ! -f "docs/.vitepress/config.ts" ]; then
-    echo "❌ docs/.vitepress/config.ts not found"
-    exit 1
+# Locate VitePress config (support .ts/.mjs/.js)
+CONFIG_FILE=""
+for f in docs/.vitepress/config.ts docs/.vitepress/config.mjs docs/.vitepress/config.js; do
+  if [ -f "$f" ]; then
+    CONFIG_FILE="$f"
+    break
+  fi
+done
+
+if [ -z "$CONFIG_FILE" ]; then
+  echo "❌ docs/.vitepress/config.(ts|mjs|js) not found"
+  exit 1
 fi
 
 # Extract links from config.ts sidebar and nav
 # This is a simple grep - could be enhanced with proper parsing
-LINKS=$(grep -oE "link:\s*['\"]([^'\"]+)" docs/.vitepress/config.ts | sed -E "s/link:\s*['\"]([^'\"]+)/\1/")
+LINKS=$(grep -oE "link:\s*['\"]([^'\"]+)" "$CONFIG_FILE" | sed -E "s/link:\s*['\"]([^'\"]+)/\1/")
 
 BROKEN_LINKS=0
 
 for link in $LINKS; do
+    # Skip external URLs
+    if echo "$link" | grep -Eq '^https?://|^mailto:'; then
+        echo "✅ External link: $link (skipped)"
+        continue
+    fi
+
     # Remove hash anchors for file checking
     FILE_PATH=$(echo "$link" | sed 's/#.*//')
     
