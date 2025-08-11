@@ -5,6 +5,7 @@
 build_generation_prompt() {
     local project_type="$1"
     local project_name="$2"
+    local user_directive="${3:-}"
     
     # Check for configuration files
     local style_guide=""
@@ -113,7 +114,7 @@ build_generation_prompt() {
     - Include proper navigation categories
     - Set up social links based on detected repository
    - Enable 3-column layout with outline configuration
-   - Import the custom theme: \`import { defineConfig } from 'vitepress'\`
+    - Import the custom theme: \`import { defineConfig } from 'vitepress'\`
    - Reference config.template.ts for VitePress config structure
    - IMPORTANT: Reference sidebar-example.md for proper sidebar configuration
    
@@ -139,7 +140,7 @@ build_generation_prompt() {
  IMPORTANT: The config.ts must have zero broken links. Cross-check every link against your planned files.
 
  Platform guardrails:
- - For non-iOS projects, DO NOT include iOS-specific concepts, links, or pages (e.g., Tuist, SwiftData, CloudKit, App Store, TestFlight, Xcode). Only include them for `project_type=ios`.
+  - For non-iOS projects, DO NOT include iOS-specific concepts, links, or pages (e.g., Tuist, SwiftData, CloudKit, App Store, TestFlight, Xcode). Only include them for \`project_type=ios\`.
  - Resources menu must include only links with absolute URLs you can determine (e.g., detected GitHub repo). Do not add placeholder links like '#'.
  - The nav must only include sections for which you will create pages (e.g., omit '/technical/' if you are not creating 'docs/technical/index.md').
 
@@ -155,8 +156,8 @@ Output your complete analysis and plan, then proceed to Phase 2.
 - Reference claudux.md for project-specific coding patterns and conventions when creating technical documentation
 - Ensure all internal links work
 - Add breadcrumb navigation at the top of EVERY page (except root):
-  * Format: `[Home](/) > [Section](/section/) > Current Page`
-  * Example: `[Home](/) > [Guide](/guide/) > [Setup](/guide/setup)`
+  * Format: [Home](/) > [Section](/section/) > Current Page
+  * Example: [Home](/) > [Guide](/guide/) > [Setup](/guide/setup)
   * Place as first line of content after frontmatter
   * Use descriptive names, not paths
 
@@ -185,11 +186,46 @@ VitePress Routing Rules:
 - Technical details must match implementation
 - No hypothetical or placeholder content"
     
+    # Append user directive if provided
+    if [[ -n "$user_directive" ]]; then
+        prompt+="
+
+**USER DIRECTIVE (Highest Priority)**
+- ${user_directive}
+
+Strictly adhere to this directive while keeping ZERO broken links in config.ts and ensuring every link maps to a real file you create."
+    fi
+
     echo "$prompt"
 }
 
 # Main update function
 update() {
+    # Parse optional flags (e.g., -m/--message/--with for a focused run)
+    local user_message="${CLAUDUX_MESSAGE:-}"
+    local already_autofixed="${CLAUDUX_AUTOFIXED:-}" # env guard to avoid loops
+    local strict_mode=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -m|--message|--with)
+                shift
+                user_message="${1:-}"
+                shift || true
+                ;;
+            --strict)
+                strict_mode=true
+                shift
+                ;;
+            --)
+                shift; break ;;
+            -*)
+                error_exit "Unknown option for 'update': $1. Usage: claudux update [--with|-m \"message\"] [--strict]" 2
+                ;;
+            *)
+                error_exit "Unexpected argument: $1" 2
+                ;;
+        esac
+    done
     info "📊 Starting documentation update and cleanup..."
     echo ""
     
@@ -223,16 +259,19 @@ update() {
     
     # Build the prompt
     info "📝 Building prompt for $PROJECT_TYPE project..."
+    if [[ -n "$user_message" ]]; then
+        info "🎯 Focused directive: ${user_message:0:120}"
+    fi
     load_project_config
     
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
-    local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME")
+    local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
     
     # Check if prompt was built successfully
     if [[ -z "$prompt" ]]; then
-        error "❌ Failed to build generation prompt"
+        warn "❌ Failed to build generation prompt"
         warn "   PROJECT_TYPE: $PROJECT_TYPE"
         warn "   PROJECT_NAME: $PROJECT_NAME"
         warn "   Working directory: $(pwd)"
@@ -250,9 +289,8 @@ update() {
     # Save prompt for debugging
     echo "$prompt" > /tmp/claudux-prompt.txt
     
-    set +e  # Temporarily disable exit on error
-    
     # Run Claude with real-time output (no buffering)
+    local claude_exit_code=0
     if command -v stdbuf &> /dev/null; then
         # Use stdbuf to disable output buffering for real-time display
         stdbuf -o0 -e0 claude \
@@ -261,6 +299,7 @@ update() {
             --allowedTools "Read,Write,Edit,Delete" \
             --permission-mode acceptEdits \
             "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+        claude_exit_code=${PIPESTATUS[0]}
     else
         # Fallback without stdbuf
         claude \
@@ -269,17 +308,15 @@ update() {
             --allowedTools "Read,Write,Edit,Delete" \
             --permission-mode acceptEdits \
             "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+        claude_exit_code=${PIPESTATUS[0]}
     fi
-    
-    local claude_exit_code=${PIPESTATUS[0]}
-    set -e  # Re-enable exit on error
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     # Log Claude invocation result
     if [[ $claude_exit_code -ne 0 ]]; then
-        error "❌ Claude CLI exited with code: $claude_exit_code"
+        warn "❌ Claude CLI exited with code: $claude_exit_code"
         if [[ -f /tmp/claudux-claude.log ]]; then
             warn "📋 Last output from Claude:"
             tail -20 /tmp/claudux-claude.log | sed 's/^/   /'
@@ -287,8 +324,10 @@ update() {
     fi
     
     # Kill the progress indicator
-    kill $progress_pid 2>/dev/null
-    wait $progress_pid 2>/dev/null
+    if [[ -n "$progress_pid" ]]; then
+        kill $progress_pid 2>/dev/null || true
+        wait $progress_pid 2>/dev/null || true
+    fi
     
     echo ""
     
@@ -305,8 +344,40 @@ update() {
             set -e
             echo ""
             if [[ $VALIDATE_EXIT -ne 0 ]]; then
-                error "❌ Link validation failed. Documentation contains broken links."
-                error_exit "Please re-run 'claudux update' after addressing the reported paths."
+                warn "⚠️  Link validation found issues. Some documentation links may be broken."
+
+                # Attempt a single auto-fix pass: collect missing files and re-run with a focused directive
+                if [[ -z "$already_autofixed" ]]; then
+                    # Re-run validator to collect machine-readable list
+                    local missing_tmp="/tmp/claudux-missing-files.txt"
+                    rm -f "$missing_tmp" 2>/dev/null || true
+                    if "$LIB_DIR/validate-links.sh" --output "$missing_tmp" >/dev/null 2>&1; then
+                        : # no-op; shouldn't happen because prior run failed
+                    fi
+                    if [[ -s "$missing_tmp" ]]; then
+                        local file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
+                        warn "🛠️  Auto-fix: asking Claude to create missing pages: $file_list"
+                        echo ""
+
+                        # Build a focused directive
+                        local fix_msg="Create the following missing documentation files with correct frontmatter, breadcrumbs, and minimal but accurate content; update navigation accordingly. Ensure config.ts links are valid and do not introduce new links that lack files. Missing files: ${file_list}"
+
+                        # Mark as autofixed to avoid loops and re-run in-place (second pass)
+                        if $strict_mode; then
+                            CLAUDUX_AUTOFIXED=1 update --strict -m "$fix_msg"
+                        else
+                            CLAUDUX_AUTOFIXED=1 update -m "$fix_msg"
+                        fi
+                        return $?
+                    fi
+                fi
+
+                warn "   Consider running 'claudux update -m \"Fill all missing pages and fix broken links\"' to target the fix."
+                echo ""
+                # Continue instead of exiting - validation is informational
+                if $strict_mode; then
+                    error_exit "❌ Broken links remain after generation. Strict mode is enabled."
+                fi
             fi
         fi
         
@@ -315,7 +386,7 @@ update() {
         show_detailed_changes
         
     else
-        error "Claude Code failed with exit code $claude_exit_code"
+        warn "Claude Code failed with exit code $claude_exit_code"
         echo ""
         warn "🔧 Troubleshooting steps:"
         echo "   1. Check Claude CLI is authenticated:"

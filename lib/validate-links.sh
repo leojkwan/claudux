@@ -3,6 +3,22 @@
 # Validate that all links in VitePress config actually exist
 # This prevents 404 errors in documentation
 
+OUTPUT_FILE=""
+
+# Parse optional args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output)
+      shift
+      OUTPUT_FILE="${1:-}"
+      shift || true
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 echo "🔍 Validating documentation links..."
 
 # Check if docs directory exists
@@ -27,44 +43,63 @@ fi
 
 # Extract links from config.ts sidebar and nav
 # This is a simple grep - could be enhanced with proper parsing
-LINKS=$(grep -oE "link:\s*['\"]([^'\"]+)" "$CONFIG_FILE" | sed -E "s/link:\s*['\"]([^'\"]+)/\1/")
+LINKS=$(grep -oE "link:\s*['\"][^'\"]+['\"]" "$CONFIG_FILE" | sed "s/link: ['\"]//; s/['\"].*//")
 
 BROKEN_LINKS=0
+VALID_LINKS=0
+EXTERNAL_LINKS=0
+BROKEN_LIST=""
 
 for link in $LINKS; do
     # Skip external URLs
     if echo "$link" | grep -Eq '^https?://|^mailto:'; then
-        echo "✅ External link: $link (skipped)"
+        EXTERNAL_LINKS=$((EXTERNAL_LINKS + 1))
         continue
     fi
 
     # Remove hash anchors for file checking
     FILE_PATH=$(echo "$link" | sed 's/#.*//')
     
-    # Convert link to actual file path
-    if [[ "$FILE_PATH" == */ ]]; then
-        # Directory link - check for index.md
+    # Normalize site-rooted paths and convert link to actual file path
+    # Rules:
+    #  - '/' maps to docs/index.md
+    #  - '/path/' maps to docs/path/index.md
+    #  - '/path' maps to docs/path.md
+    if [[ "$FILE_PATH" == "/" ]]; then
+        CHECK_PATH="docs/index.md"
+    elif [[ "$FILE_PATH" == */ ]]; then
         CHECK_PATH="docs${FILE_PATH}index.md"
     else
-        # File link - add .md extension
         CHECK_PATH="docs${FILE_PATH}.md"
     fi
     
     # Check if file exists
     if [ ! -f "$CHECK_PATH" ]; then
-        echo "❌ Broken link: $link → Missing: $CHECK_PATH"
+        BROKEN_LIST="${BROKEN_LIST}   ❌ $link → Missing: $CHECK_PATH\n"
+        if [[ -n "$OUTPUT_FILE" ]]; then
+            echo "$CHECK_PATH" >> "$OUTPUT_FILE"
+        fi
         BROKEN_LINKS=$((BROKEN_LINKS + 1))
     else
-        echo "✅ Valid link: $link → Found: $CHECK_PATH"
+        VALID_LINKS=$((VALID_LINKS + 1))
     fi
 done
 
+echo ""
+echo "📊 Link validation summary:"
+echo "   ✅ Valid links: $VALID_LINKS"
+if [ $EXTERNAL_LINKS -gt 0 ]; then
+    echo "   🔗 External links: $EXTERNAL_LINKS (skipped)"
+fi
+
 if [ $BROKEN_LINKS -eq 0 ]; then
     echo ""
-    echo "✅ All links validated successfully!"
+    echo "✅ All internal links validated successfully!"
 else
+    echo "   ❌ Broken links: $BROKEN_LINKS"
     echo ""
-    echo "❌ Found $BROKEN_LINKS broken links"
-    echo "Please ensure all files referenced in config.ts are created"
+    echo "Broken links found:"
+    echo -e "$BROKEN_LIST"
+    echo "These files may need to be created or the links updated."
     exit 1
 fi

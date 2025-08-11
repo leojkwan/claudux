@@ -4,8 +4,8 @@
 # Powered by Claude AI and VitePress
 #
 
-# Script setup
-set -euo pipefail
+# Script setup - only check for undefined variables, not exit codes
+set -u
 
 # Get the directory where this script is located
 # This handles both symlinks and direct execution
@@ -49,7 +49,8 @@ main() {
         "update")
             show_header
             check_claude
-            update
+            shift
+            update "$@"
             ;;
         "clean"|"cleanup")
             show_header
@@ -58,7 +59,8 @@ main() {
         "recreate")
             show_header
             check_claude
-            recreate_docs
+            shift
+            recreate_docs "$@"
             ;;
         "serve"|"server"|"dev")
             show_header
@@ -67,6 +69,16 @@ main() {
         "create-template"|"template")
             show_header
             create_claudux_md
+            ;;
+        "validate"|"check-links")
+            show_header
+            shift
+            validate_links "$@"
+            ;;
+        "repair")
+            show_header
+            shift
+            validate_links --auto-fix "$@"
             ;;
         "help"|"-h"|"--help")
             show_header
@@ -92,5 +104,22 @@ main() {
 # Handle errors gracefully
 trap 'echo ""; error_exit "Script interrupted" 130' INT TERM
 
-# Run main function with all arguments
-main "$@" 
+# Translate -v / -vv / -q into environment var consumed by formatter
+CLAUDUX_VERBOSE=${CLAUDUX_VERBOSE:-0}
+filtered_args=()
+for arg in "$@"; do
+  case "$arg" in
+    -vv)
+      CLAUDUX_VERBOSE=2 ;;
+    -v)
+      if [[ "$CLAUDUX_VERBOSE" -lt 1 ]]; then CLAUDUX_VERBOSE=1; fi ;;
+    -q)
+      CLAUDUX_VERBOSE=0 ;;
+    *)
+      filtered_args+=("$arg") ;;
+  esac
+done
+export CLAUDUX_VERBOSE
+
+# Run main function with filtered args
+main "${filtered_args[@]}"

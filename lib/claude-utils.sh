@@ -66,6 +66,7 @@ show_progress() {
 format_claude_output() {
     local file_count=0
     local current_file=""
+    local verbose_level="${CLAUDUX_VERBOSE:-0}"
     
     while IFS= read -r line; do
         # Detect file operations
@@ -79,7 +80,9 @@ format_claude_output() {
             printf "\r\033[K📝 Creating [%d]: %s\n" "$file_count" "$current_file"
         elif [[ "$line" =~ Reading[[:space:]]+(.*) ]]; then
             current_file="${BASH_REMATCH[1]}"
-            printf "\r\033[K🔍 Analyzing: %s" "$current_file"
+            if [[ "$verbose_level" -ge 1 ]]; then
+                printf "\r\033[K🔍 Analyzing: %s\n" "$current_file"
+            fi
         elif [[ "$line" =~ Updating[[:space:]]+(.*) ]]; then
             current_file="${BASH_REMATCH[1]}"
             ((file_count++))
@@ -104,7 +107,9 @@ format_claude_output() {
             # Skip empty lines to reduce noise
             :
         elif [[ "$line" =~ "Tool Use:" ]] || [[ "$line" =~ "Using tool:" ]]; then
-            # Skip tool use messages to reduce noise
+            if [[ "$verbose_level" -ge 2 ]]; then
+                echo "   $line"
+            fi
             :
         elif [[ "$line" =~ "Assistant:" ]]; then
             # Skip assistant markers

@@ -29,6 +29,8 @@ create_claudux_md() {
     # Check Claude availability
     check_claude
     
+    # No interactive preference capture; generation is fully automatic
+    
     # Get model settings
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
     
@@ -91,6 +93,8 @@ create_claudux_md() {
 
 Generate the claudux.md file now."
     
+    # Keep prompt minimal and code-driven; no user preference injection
+    
     info "🤖 Claude analyzing $PROJECT_NAME codebase..."
     info "🧠 Using $model_name"
     info "⏳ This will analyze your actual code patterns..."
@@ -121,6 +125,68 @@ Generate the claudux.md file now."
     fi
 }
 
+# Validate links in documentation
+validate_links() {
+    info "🔍 Running link validation..."
+    echo ""
+
+    local auto_fix=false
+    local user_message=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --auto-fix)
+                auto_fix=true
+                shift
+                ;;
+            -m|--message)
+                shift
+                user_message="${1:-}"
+                shift || true
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    
+    if [[ ! -d "docs" ]]; then
+        error_exit "❌ No documentation found. Generate docs first with 'claudux update'"
+    fi
+    
+    if [[ ! -f "$LIB_DIR/validate-links.sh" ]]; then
+        error_exit "❌ Link validation script not found"
+    fi
+    
+    # Run validation script; also capture machine-readable list when failing
+    local missing_tmp="/tmp/claudux-missing-files.txt"
+    rm -f "$missing_tmp" 2>/dev/null || true
+    "$LIB_DIR/validate-links.sh"
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        # Try again to collect a list for auto-fix flow
+        "$LIB_DIR/validate-links.sh" --output "$missing_tmp" >/dev/null 2>&1 || true
+    fi
+    
+    echo ""
+    if [[ $exit_code -eq 0 ]]; then
+        success "✅ All links are valid!"
+    else
+        warn "⚠️  Some links are broken."
+        if $auto_fix && [[ -s "$missing_tmp" ]]; then
+            local file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
+            info "🛠️  Auto-fixing by asking Claude to create: $file_list"
+            local fix_msg="Create the following missing documentation files with correct frontmatter, breadcrumbs, and minimal but accurate content; update navigation accordingly. Ensure config.ts links are valid. Missing files: ${file_list}. ${user_message}"
+            CLAUDUX_AUTOFIXED=1 update -m "$fix_msg"
+            return $?
+        else
+            warn "Run: claudux update -m 'Fill all missing pages and fix broken links'"
+        fi
+    fi
+    
+    return $exit_code
+}
+
 # Show help and usage information
 show_help() {
     echo ""
@@ -133,12 +199,29 @@ show_help() {
     echo "🔧 Command line usage:"
     echo "  ./claudux                - Show interactive menu"
     echo "  ./claudux update         - Update docs with cleanup"
-    echo "  ./claudux dev            - Start docs server (alias for serve)"
-    echo "  ./claudux serve          - Start docs server"
-    echo "  ./claudux create-template - Analyze codebase and generate claudux.md patterns"
+    echo "  ./claudux update -m \"message\""
+    echo "                         - Update with a focused directive for Claude"
+    echo "  ./claudux update --with \"directive\" [--strict]"
+    echo "                         - Same as -m, --strict fails if links remain broken after auto-fix"
+    echo "  ./claudux serve          - Start docs server (localhost:5173)"
+    echo "  ./claudux validate       - Check for broken links in docs"
+    echo "  ./claudux repair [-m \"message\"]"
+    echo "                         - Validate and auto-create missing pages using Claude"
     echo "  ./claudux clean          - Clean up obsolete docs only"
     echo "  ./claudux recreate       - Start fresh (delete all docs)"
+    echo "  ./claudux create-template - Analyze codebase and generate claudux.md"
     echo "  ./claudux help           - Show this help"
+    echo ""
+    echo "Options:"
+    echo "  --with, -m               - Provide a high-level directive to guide generation"
+    echo "  --strict                 - Exit with error if links remain broken after auto-fix"
+    echo "  -v / -vv                 - Increase verbosity (set CLAUDUX_VERBOSE=1/2)"
+    echo "  -q                       - Quiet (errors only)"
+    echo ""
+    echo "Environment:"
+    echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: opus)"
+    echo "  CLAUDUX_MESSAGE=...      - Default directive if -m/--with not provided"
+    echo "  CLAUDUX_VERBOSE=0|1|2    - Verbosity level (0 default)"
     echo ""
     echo "💡 The main update command automatically:"
     echo "  • Runs two-phase generation in a single Claude session"
@@ -176,31 +259,25 @@ show_menu() {
         PS3="> "
         
         select choice in \
-            "Generate docs (AI → VitePress)" \
-            "Serve (localhost:5173)" \
-            "Generate claudux.md (patterns doc)" \
-            "Recreate (rm -rf docs/)" \
+            "Generate docs              (scan code → markdown)" \
+            "Serve                      (vitepress dev server)" \
+            "Create CLAUDE.md           (AI context file)" \
             "Exit"
         do
             case $choice in
-                "Generate docs (AI → VitePress)")
+                "Generate docs              (scan code → markdown)")
                     echo ""
                     update
                     break
                     ;;
-                "Serve (localhost:5173)")
+                "Serve                      (vitepress dev server)")
                     echo ""
                     serve
                     break
                     ;;
-                "Generate claudux.md (patterns doc)")
+                "Create CLAUDE.md           (AI context file)")
                     echo ""
                     create_claudux_md
-                    break
-                    ;;
-                "Recreate (rm -rf docs/)")
-                    echo ""
-                    recreate_docs
                     break
                     ;;
                 "Exit")
@@ -220,29 +297,58 @@ show_menu() {
         PS3="> "
         
         select choice in \
-            "Update docs" \
-            "Serve (localhost:5173)" \
-            "Clean obsolete (≥95% conf)" \
-            "Recreate (rm -rf docs/)" \
+            "Update docs                (regenerate from code)" \
+            "Update (focused)           (enter directive → update)" \
+            "Serve                      (vitepress dev server)" \
+            "Validate links             (test all doc links)" \
+            "Repair links               (validate and auto-fix)" \
+            "Clean obsolete             (rm stale .md files)" \
+            "Create CLAUDE.md           (AI context file)" \
+            "Recreate                   (rm -rf docs && update)" \
             "Exit"
         do
             case $choice in
-                "Update docs")
+                "Update docs                (regenerate from code)")
                     echo ""
                     update
                     break
                     ;;
-                "Serve (localhost:5173)")
+                "Update (focused)           (enter directive → update)")
+                    echo ""
+                    read -r -p "Enter focused directive (leave empty to cancel): " directive
+                    if [[ -n "$directive" ]]; then
+                        update --with "$directive"
+                    else
+                        warn "No directive entered; cancelled."
+                    fi
+                    break
+                    ;;
+                "Serve                      (vitepress dev server)")
                     echo ""
                     serve
                     break
                     ;;
-                "Clean obsolete (≥95% conf)")
+                "Validate links             (test all doc links)")
+                    echo ""
+                    validate_links
+                    break
+                    ;;
+                "Repair links               (validate and auto-fix)")
+                    echo ""
+                    validate_links --auto-fix
+                    break
+                    ;;
+                "Clean obsolete             (rm stale .md files)")
                     echo ""
                     cleanup_docs
                     break
                     ;;
-                "Recreate (rm -rf docs/)")
+                "Create CLAUDE.md           (AI context file)")
+                    echo ""
+                    create_claudux_md
+                    break
+                    ;;
+                "Recreate                   (rm -rf docs && update)")
                     echo ""
                     recreate_docs
                     break

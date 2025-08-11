@@ -1,76 +1,88 @@
-# 🚀 Claudux - Supercharge Your Docs with Claude Code
+# 🚀 Claudux — Supercharge Your Docs with Claude Code
 
-> **Transform your codebase into beautiful documentation in minutes, powered by Claude Code's AI**
+> Transform your codebase into cohesive, elegant documentation in minutes — powered by Claude Code.
 
 [![npm version](https://img.shields.io/npm/v/claudux.svg)](https://www.npmjs.com/package/claudux)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<p align="center">
+  <!-- Replace ./assets/readme-hero.png with your screenshot (recommended: 1600×900, .webp or .png) -->
+  <img src="./assets/readme-hero.png" alt="Claudux documentation site screenshot" width="100%" />
+</p>
 
 ## 💡 Why Claudux?
 
 Ever spent hours writing documentation that becomes outdated the moment you push code? **Claudux** leverages your Claude Code subscription to automatically generate and maintain comprehensive documentation that actually stays in sync with your code.
 
-### 🎯 Perfect for Claude Code Users
+### 🎯 Built for Claude Code users
 
-If you're already using Claude Code for development, Claudux is the natural extension for your documentation workflow:
+- **Same AI, new superpower**: the assistant that helps you code now maintains your docs
+- **Context-aware**: reads your codebase to generate accurate, cohesive docs
+- **Stays current**: update docs with a single command as your code evolves
 
-- **Same AI, Different Task**: The AI that helps you write code now documents it too
-- **Context-Aware**: Claude understands your entire codebase, creating cohesive documentation
-- **Always Current**: Update docs as easily as you update code
-
-## 🌟 Get Started in 30 Seconds
+## 🌟 Get started in 30 seconds
 
 ```bash
-# Install globally via npm
+# Install (global)
 npm install -g claudux
 
 # Or install from GitHub
 npm install -g github:leokwan/claudux
 
-# Generate docs for any project
+# Generate docs for a project
 cd your-project
 claudux update
 
-# See your beautiful docs
-claudux serve
+# Preview locally
+claudux serve  # http://localhost:5173
 ```
 
-## 🤖 Powered by Claude Code
+## 📚 Documentation
 
-Claudux showcases what's possible with Claude Code subscriptions:
+- Browse in-repo: [`docs/index.md`](docs/index.md)
+- Quick links:
+  - Guide: [Installation](docs/guide/installation.md) · [Quick Start](docs/guide/quickstart.md) · [Configuration](docs/guide/configuration.md) · [Commands](docs/guide/commands.md)
+  - Features: [Two-Phase Generation](docs/features/two-phase-generation.md) · [Smart Cleanup](docs/features/smart-cleanup.md) · [VitePress Integration](docs/features/vitepress-integration.md)
+  - API: [CLI](docs/api/cli.md) · [Library](docs/api/library.md)
+  - Technical: [Architecture](docs/technical/index.md) · [Patterns](docs/technical/patterns.md) · [Modules](docs/technical/modules.md)
+  - Examples: [Basic Setup](docs/examples/basic-setup.md) · [Advanced Usage](docs/examples/advanced-usage.md)
+  - Help: [FAQ](docs/faq.md) · [Troubleshooting](docs/troubleshooting.md)
 
-### Intelligent Documentation
-- **Understands Context**: Not just parsing - actual comprehension of your code's purpose
-- **Natural Language**: Documentation that reads like it was written by your best developer
-- **Smart Updates**: Only regenerates what changed, preserving customizations
+When you’re ready to host, point your DNS to your static site (VitePress). The docs config is already set up; run `claudux serve` to preview.
 
-### Two-Phase Generation
-1. **Architecture Analysis**: Claude studies your project structure and creates a documentation plan
-2. **Content Creation**: Detailed documentation following best practices for your stack
+## 🧠 Powered by Claude Code
 
-## 📊 Real Results
+Claudux runs a two-phase flow to produce high‑quality docs:
 
-> "Claudux saved us 40+ hours on our documentation sprint. It understood our React patterns better than some team members!" - *Startup CTO*
-
-> "Finally, documentation that developers actually want to maintain." - *Open Source Maintainer*
+1. **Architecture analysis**: reads your codebase, builds a structured plan, and generates a VitePress config with zero broken links
+2. **Content creation**: writes the docs with cohesive narrative, correct links, and breadcrumbs
 
 ## 🎨 Features
 
-- 🤖 **AI-Powered**: Uses Claude Code for intelligent documentation generation
-- 🧹 **Smart Cleanup**: Semantic obsolescence detection, not just regex
-- 📚 **VitePress Integration**: Beautiful documentation sites out of the box
-- 🚀 **Two-Phase Generation**: Architecture planning + content generation
-- 🎯 **Project Detection**: Auto-detects project type and structure
+- **AI‑powered**: Claude Code generates and updates docs using your actual code
+- **Smart cleanup**: semantic obsolescence detection (not just regex)
+- **VitePress‑ready**: ships with a clean config, search, edit links, and nice defaults
+- **Two‑phase generation**: planning + execution in one run
+- **Auto‑detection**: determines project type and structure to tailor docs
+
+## ✅ Requirements
+
+- Node.js ≥ 14
+- Claude CLI installed and authenticated (`claude config get`)
 
 ## 🛠️ Commands
 
 ```bash
-claudux              # Interactive mode
-claudux update       # Generate/update documentation
-claudux serve        # Start dev server (localhost:5173)
-claudux clean        # Remove obsolete files
-claudux recreate     # Start fresh (delete all docs)
-claudux template     # Create config file
-claudux help         # Show help
+claudux                   # Interactive menu
+claudux update            # Generate/update docs (two‑phase, with cleanup)
+claudux update -m "..."   # Update with a focused directive for Claude
+claudux serve             # Start dev server (localhost:5173)
+claudux validate          # Validate links in docs
+claudux repair            # Validate and auto‑create missing pages
+claudux clean             # Remove obsolete files only
+claudux recreate          # Start fresh (delete all docs)
+claudux template          # Analyze codebase and generate claudux.md
+claudux help              # Show help
 ```
 
 ## 🔧 Configuration
@@ -90,18 +102,17 @@ Create a `docs-ai-config.json` in your project root:
 }
 ```
 
-## 📈 The Claude Code Advantage
+## 🖼️ Screenshot placement (for README and docs)
 
-Claudux is designed to maximize your Claude Code subscription value:
-
-1. **Time Saved**: Hours of documentation in minutes
-2. **Quality**: Consistent, professional documentation
-3. **Maintenance**: Keep docs synced with code changes
-4. **Learning**: See how Claude understands and explains your code
+- README hero image: drop a file at `assets/readme-hero.png` and it will render above.
+  - Recommended: 1600×900, `.webp` preferred; keep text minimal and legible.
+  - You can also host it on GitHub and reference: `https://raw.githubusercontent.com/leokwan/claudux/main/assets/readme-hero.png`.
+- Docs social card (optional): place `docs/public/og-image.png` and add to the docs config if you want rich link previews.
+  - Example meta tag to add in `docs/.vitepress/config.ts` head: `['meta', { property: 'og:image', content: '/og-image.png' }]`.
 
 ## 🤝 Contributing
 
-We love contributions! Check out our [contributing guide](CONTRIBUTING.md) to get started.
+We love contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
