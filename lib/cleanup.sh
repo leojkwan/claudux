@@ -64,6 +64,8 @@ cleanup_docs_silent() {
 
 # Recreate docs from scratch
 recreate_docs() {
+    # pass through any args to the subsequent update call (e.g., -m/--with)
+    local passthrough=("$@")
     warn "🗑️  This will completely delete all documentation and start fresh!"
     print_color "RED" "⚠️  This action cannot be undone."
     echo ""
@@ -106,6 +108,6 @@ recreate_docs() {
     success "🚀 Starting fresh documentation generation..."
     echo ""
     
-    # Generate fresh docs
-    update
+    # Generate fresh docs and allow focused directive
+    update "${passthrough[@]}"
 }

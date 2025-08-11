@@ -3,7 +3,7 @@
 # VitePress Configuration Setup Script
 # Links external config to docs directory so it survives regeneration
 
-set -e
+# Don't exit on errors - handle them gracefully
 
 echo "🔧 Setting up VitePress configuration..."
 
@@ -14,7 +14,7 @@ mkdir -p docs
 mkdir -p docs/.vitepress
 
 # Link the external config files to docs/.vitepress
-echo "📁 Linking configuration files..."
+echo "📁 Setting up configuration files..."
 
 # Get the directory where this script is located
 # Handle both symlinks and direct execution (npm installations)
@@ -52,12 +52,12 @@ export default defineConfig({
 EOF
 fi
 
-# Link theme directory (remove existing first to prevent loops)
+# Copy theme directory (remove existing first to prevent conflicts)
 if [ -d "$SCRIPT_DIR/theme" ]; then
     rm -rf "docs/.vitepress/theme"
-    # Use absolute path for the symlink to work from any installation method
-    ln -sf "$SCRIPT_DIR/theme" "docs/.vitepress/theme"
-    echo "   ✅ theme/ directory linked"
+    # Copy instead of symlink to avoid Vite serving allow list issues
+    cp -r "$SCRIPT_DIR/theme" "docs/.vitepress/theme"
+    echo "   ✅ theme/ directory copied"
 else
     echo "   ❌ theme/ directory not found at $SCRIPT_DIR/theme"
 fi
