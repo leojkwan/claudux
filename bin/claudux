@@ -132,10 +132,11 @@ validate_dependencies() {
         echo "  Install from: https://nodejs.org/" >&2
         has_errors=true
     else
-        # Check Node version (require v14+)
+        # Check Node version (require v18+)
         local node_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
-        if [[ -n "$node_version" ]] && [[ "$node_version" -lt 14 ]]; then
-            echo "WARNING: Node.js v14+ is recommended (found v$node_version)" >&2
+        if [[ -n "$node_version" ]] && [[ "$node_version" -lt 18 ]]; then
+            echo "ERROR: Node.js v18+ is required (found v$node_version)" >&2
+            has_errors=true
         fi
     fi
     
