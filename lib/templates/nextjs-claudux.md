@@ -40,4 +40,4 @@
 
 ---
 
-This file is a reference only; generated `claudux.md` must reflect actual patterns in the repository.
+This file is a reference only; generated `CLAUDE.md` must reflect actual patterns in the repository.

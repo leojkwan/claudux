@@ -13,4 +13,4 @@ Sections to produce after analysis:
 - Security considerations
 - Common utilities and helpers
 
-This is a reference skeleton; generated `claudux.md` must mirror actual repository patterns.
+This is a reference skeleton; generated `CLAUDE.md` must mirror actual repository patterns.

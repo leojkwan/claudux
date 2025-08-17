@@ -9,19 +9,19 @@ show_header() {
     echo ""
 }
 
-# Create claudux.md by analyzing actual codebase patterns
+# Create CLAUDE.md by analyzing actual codebase patterns
 create_claudux_md() {
     # Load project configuration first
     load_project_config
     
-    if [[ -f "claudux.md" ]]; then
-        print_color "YELLOW" "⚠️  claudux.md already exists!"
+    if [[ -f "CLAUDE.md" ]]; then
+        print_color "YELLOW" "⚠️  CLAUDE.md already exists!"
         echo ""
-        echo "Current file contains $(wc -l < claudux.md) lines"
+        echo "Current file contains $(wc -l < CLAUDE.md) lines"
         echo ""
-        read -p "❓ Overwrite existing claudux.md? (y/N): " -r
+        read -p "❓ Overwrite existing CLAUDE.md? (y/N): " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "📋 Keeping existing claudux.md"
+            echo "📋 Keeping existing CLAUDE.md"
             return 0
         fi
     fi
@@ -38,16 +38,16 @@ create_claudux_md() {
     local template_file
     case "$PROJECT_TYPE" in
         "ios")
-            template_file="$LIB_DIR/templates/ios-claudux.md"
+            template_file="$LIB_DIR/templates/ios-claude.md"
             ;;
         "nextjs")
-            template_file="$LIB_DIR/templates/nextjs-claudux.md"
+            template_file="$LIB_DIR/templates/nextjs-claude.md"
             ;;
         "react"|"javascript"|"nodejs")
-            template_file="$LIB_DIR/templates/generic-claudux.md"
+            template_file="$LIB_DIR/templates/generic-claude.md"
             ;;
         *)
-            template_file="$LIB_DIR/templates/generic-claudux.md"
+            template_file="$LIB_DIR/templates/generic-claude.md"
             ;;
     esac
     
@@ -61,37 +61,48 @@ create_claudux_md() {
     echo ""
     
     # Create analysis prompt
-    local prompt="Analyze this $PROJECT_TYPE project ($PROJECT_NAME) and create a project-specific claudux.md file containing the actual coding patterns and conventions used in this codebase.
+    local prompt="Analyze this $PROJECT_TYPE project ($PROJECT_NAME) and create a CLAUDE.md file containing AI coding assistant rules and instructions based on the actual patterns and conventions used in this codebase.
 
-**INSTRUCTIONS:**
-1. **Use Template as Reference**: Read $template_file as a reference guide for structure and types of patterns to look for
-2. **Analyze Real Code**: Examine the actual source files, architecture, and implementation patterns
-3. **Generate Project-Specific Content**: Create claudux.md with patterns that actually exist in this project
+**OBJECTIVE:**
+Create a CLAUDE.md file that tells AI assistants (Claude, Cursor, etc.) HOW to work with this codebase. This is NOT documentation - it's a set of rules and instructions for AI to follow when modifying or extending the code.
 
-**WHAT TO ANALYZE:**
-- Architecture patterns (how components are organized)
-- Dependency injection patterns (managers, protocols, initialization)
-- State management approaches (ViewModels, data flow)
-- Code organization (directory structure, file naming)
-- Testing patterns (mocking, test data, strategies)
+**FORMAT REQUIREMENTS:**
+The CLAUDE.md file should contain INSTRUCTIONS and RULES for AI assistants, structured like:
+- Project overview (2-3 sentences max) 
+- Key architecture decisions to respect
+- Code style rules (MUST follow, SHOULD follow)
+- Testing requirements (what tests to write, how to run them)
+- Common patterns to use (with examples from actual code)
+- Anti-patterns to avoid (what NOT to do)
+- Project-specific commands and workflows
+- File organization rules
+- Important constraints and gotchas
+
+**ANALYZE THE CODEBASE FOR:**
+- Actual naming conventions used (files, functions, variables)
+- Import/dependency patterns
 - Error handling approaches
-- Performance considerations
-- Common utilities and extensions
+- State management patterns
+- Testing strategies and tools
+- Build and deployment processes
+- Code formatting rules (if any)
+- Security practices
 
-**OUTPUT REQUIREMENTS:**
-- Create claudux.md with real examples from this codebase
-- Use actual class names, protocols, and file names when possible
-- Include code snippets from real files
-- Explain WHY these patterns were chosen for this project
-- Make it specific to $PROJECT_NAME, not generic advice
+**OUTPUT STYLE:**
+Write as DIRECTIVES to an AI assistant. Use imperative mood. Examples:
+- \"ALWAYS use TypeScript strict mode\"
+- \"NEVER commit directly to main branch\"
+- \"When creating new components, follow the pattern in src/components/Button.tsx\"
+- \"Before modifying database schemas, check migrations in db/migrations/\"
+- \"Run 'npm test' before committing any changes\"
 
 **IMPORTANT:**
-- This should reflect the ACTUAL patterns in this project
-- Use real code examples, not hypothetical ones
-- Document the reasoning behind architectural decisions
-- Include project-specific context and constraints
+- Write rules based on ACTUAL patterns found in the code, not generic best practices
+- Include specific file paths and function names as examples
+- Make it actionable - every rule should guide AI behavior
+- Keep it concise - focus on what's unique or critical to this project
 
-Generate the claudux.md file now."
+Generate the CLAUDE.md file now."
     
     # Keep prompt minimal and code-driven; no user preference injection
     
@@ -110,9 +121,9 @@ Generate the claudux.md file now."
     
     local claude_exit_code=$?
     
-    if [[ $claude_exit_code -eq 0 ]] && [[ -f "claudux.md" ]]; then
-        local line_count=$(wc -l < claudux.md)
-        print_color "GREEN" "✅ Generated project-specific claudux.md ($line_count lines)"
+    if [[ $claude_exit_code -eq 0 ]] && [[ -f "CLAUDE.md" ]]; then
+        local line_count=$(wc -l < CLAUDE.md)
+        print_color "GREEN" "✅ Generated project-specific CLAUDE.md ($line_count lines)"
         echo ""
         echo "💡 Next steps:"
         echo "  1. Review the generated patterns - they're based on your actual code"
@@ -158,7 +169,7 @@ validate_links() {
     fi
     
     # Run validation script; also capture machine-readable list when failing
-    local missing_tmp="/tmp/claudux-missing-files.txt"
+    local missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
     rm -f "$missing_tmp" 2>/dev/null || true
     "$LIB_DIR/validate-links.sh"
     local exit_code=$?
@@ -209,7 +220,7 @@ show_help() {
     echo "                         - Validate and auto-create missing pages using Claude"
     echo "  ./claudux clean          - Clean up obsolete docs only"
     echo "  ./claudux recreate       - Start fresh (delete all docs)"
-    echo "  ./claudux create-template - Analyze codebase and generate claudux.md"
+    echo "  ./claudux create-template - Analyze codebase and generate CLAUDE.md"
     echo "  ./claudux help           - Show this help"
     echo ""
     echo "Options:"

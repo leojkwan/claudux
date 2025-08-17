@@ -81,7 +81,7 @@ claudux validate          # Validate links in docs
 claudux repair            # Validate and auto‑create missing pages
 claudux clean             # Remove obsolete files only
 claudux recreate          # Start fresh (delete all docs)
-claudux template          # Analyze codebase and generate claudux.md
+claudux template          # Analyze codebase and generate CLAUDE.md
 claudux help              # Show help
 ```
 
