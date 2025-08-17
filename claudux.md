@@ -4,6 +4,26 @@
 
 Claudux is a Bash-based CLI tool that leverages Claude AI to automatically generate comprehensive documentation for software projects. It follows a modular shell scripting architecture with clear separation of concerns across functionality-specific library modules.
 
+### What this file is (and isn't)
+
+- This is a developer-facing reference for the Claudux repository itself (architecture, patterns, and conventions).
+- It is not the `CLAUDE.md` that Claudux generates for your projects. That file is an AI instruction contract for a target repository.
+- Claudux does not read this file at runtime. It is safe to ignore if you are only using the tool.
+
+### How `CLAUDE.md` is actually used
+
+- If a project contains a top-level `CLAUDE.md`, Claudux will read it during generation to tailor docs to that project's conventions (see `lib/docs-generation.sh`, where `CLAUDE.md` is included in the prompt when present).
+- To create one for your project: `claudux template` (alias: `create-template`).
+- During `claudux update`, the presence of `CLAUDE.md` makes the output more project-specific; if absent, Claudux falls back to templates and code analysis.
+
+### Quick usage (most users)
+
+```bash
+claudux update            # Generate/update docs
+claudux serve             # Preview locally
+claudux template          # Generate a project-specific CLAUDE.md
+```
+
 ## Architecture Patterns
 
 ### 1. Modular Library Architecture
@@ -11,7 +31,7 @@ Claudux is a Bash-based CLI tool that leverages Claude AI to automatically gener
 The project uses a **source-based module system** where functionality is divided into focused library modules:
 
 ```bash
-# Main entry point (bin/claudux:35-44)
+# Main entry point (bin/claudux)
 LIB_DIR="$SCRIPT_DIR/../lib"
 
 # Source all library modules
