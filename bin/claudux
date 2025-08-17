@@ -4,23 +4,57 @@
 # Powered by Claude AI and VitePress
 #
 
-# Script setup - only check for undefined variables, not exit codes
+# Script setup - check for undefined variables; avoid -e to allow graceful handling
 set -u
+set -o pipefail  # Pipe failure propagates
 
-# Get the directory where this script is located
-# This handles both symlinks and direct execution
-if [ -L "${BASH_SOURCE[0]}" ]; then
-    # Script is a symlink, resolve it
-    SCRIPT_PATH="$(readlink "${BASH_SOURCE[0]}")"
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-else
-    # Script is not a symlink
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Better interrupt handling
+cleanup_on_exit() {
+    local exit_code=$?
+    # Kill any background processes
+    jobs -p 2>/dev/null | xargs -r kill 2>/dev/null || true
+    exit $exit_code
+}
+
+trap cleanup_on_exit EXIT
+
+# Get the directory where this script is located with robust symlink resolution
+resolve_script_path() {
+    local source="${BASH_SOURCE[0]}"
+    local count=0
+    
+    while [[ -L "$source" ]] && [[ $count -lt 10 ]]; do
+        local dir="$(cd -P "$(dirname "$source")" 2>/dev/null && pwd)"
+        if [[ -z "$dir" ]]; then
+            echo "ERROR: Could not resolve directory for: $source" >&2
+            return 1
+        fi
+        source="$(readlink "$source")"
+        [[ $source != /* ]] && source="$dir/$source"
+        ((count++))
+    done
+    
+    if [[ $count -eq 10 ]]; then
+        echo "ERROR: Too many symlink levels (possible loop)" >&2
+        return 1
+    fi
+    
+    cd -P "$(dirname "$source")" 2>/dev/null && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_path)"
+if [[ -z "$SCRIPT_DIR" ]]; then
+    echo "ERROR: Could not determine script directory" >&2
+    exit 1
 fi
 
 # Store the directory where the user called the script from
 # This ensures docs are always generated in the user's project root
 WORKING_DIR="$(pwd)"
+if [[ ! -d "$WORKING_DIR" ]]; then
+    echo "ERROR: Working directory does not exist: $WORKING_DIR" >&2
+    exit 1
+fi
 
 # Export for use in sourced scripts
 export SCRIPT_DIR
@@ -31,38 +65,191 @@ cd "$WORKING_DIR"
 
 # Determine lib directory location
 LIB_DIR="$SCRIPT_DIR/../lib"
+if [[ ! -d "$LIB_DIR" ]]; then
+    echo "ERROR: Library directory not found: $LIB_DIR" >&2
+    echo "Expected at: $LIB_DIR" >&2
+    exit 1
+fi
 
-# Source all library modules
-source "$LIB_DIR/colors.sh"
-source "$LIB_DIR/project.sh"
-source "$LIB_DIR/content-protection.sh"
-source "$LIB_DIR/claude-utils.sh"
-source "$LIB_DIR/git-utils.sh"
-source "$LIB_DIR/docs-generation.sh"
-source "$LIB_DIR/cleanup.sh"
-source "$LIB_DIR/server.sh"
-source "$LIB_DIR/ui.sh"
+# Source all library modules with error handling
+REQUIRED_LIBS=("colors.sh" "project.sh" "content-protection.sh" "claude-utils.sh" "git-utils.sh" "docs-generation.sh" "cleanup.sh" "server.sh" "ui.sh")
+
+for lib in "${REQUIRED_LIBS[@]}"; do
+    lib_path="$LIB_DIR/$lib"
+    if [[ ! -f "$lib_path" ]]; then
+        echo "ERROR: Required library file not found: $lib_path" >&2
+        exit 1
+    fi
+    if ! source "$lib_path"; then
+        echo "ERROR: Failed to source library: $lib_path" >&2
+        exit 1
+    fi
+done
+
+# Helper function to check if a function exists
+check_function() {
+    local func_name="$1"
+    if ! declare -F "$func_name" >/dev/null 2>&1; then
+        echo "ERROR: Required function '$func_name' not found. Library loading may have failed." >&2
+        exit 1
+    fi
+}
+
+# Implement file locking for concurrent execution safety
+acquire_lock() {
+    local lock_file="${TMPDIR:-/tmp}/claudux-$(pwd | md5sum 2>/dev/null || pwd | md5).lock"
+    local lock_pid
+    
+    # Check if lock file exists and if the process is still running
+    if [[ -f "$lock_file" ]]; then
+        lock_pid=$(cat "$lock_file" 2>/dev/null)
+        if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+            echo "WARNING: Another claudux instance is already running (PID: $lock_pid)" >&2
+            echo "If this is incorrect, remove the lock file: $lock_file" >&2
+            return 1
+        else
+            # Stale lock file, remove it
+            rm -f "$lock_file"
+        fi
+    fi
+    
+    # Create lock file with our PID
+    echo $$ > "$lock_file"
+    
+    # Set up cleanup on exit
+    trap "rm -f '$lock_file' 2>/dev/null" EXIT
+    
+    return 0
+}
+
+# Validate required dependencies
+validate_dependencies() {
+    local has_errors=false
+    
+    # Check for Node.js
+    if ! command -v node >/dev/null 2>&1; then
+        echo "ERROR: Node.js is required but not installed" >&2
+        echo "  Install from: https://nodejs.org/" >&2
+        has_errors=true
+    else
+        # Check Node version (require v14+)
+        local node_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+        if [[ -n "$node_version" ]] && [[ "$node_version" -lt 14 ]]; then
+            echo "WARNING: Node.js v14+ is recommended (found v$node_version)" >&2
+        fi
+    fi
+    
+    # Check for git
+    if ! command -v git >/dev/null 2>&1; then
+        echo "WARNING: git is not installed - some features may not work" >&2
+    fi
+    
+    # Check for Claude CLI
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "ERROR: Claude CLI is required but not installed" >&2
+        echo "  Install with: npm install -g @anthropic-ai/claude-cli" >&2
+        has_errors=true
+    fi
+    
+    # Check for mktemp (should be available on all Unix systems)
+    if ! command -v mktemp >/dev/null 2>&1; then
+        echo "ERROR: mktemp is required but not available" >&2
+        has_errors=true
+    fi
+    
+    if $has_errors; then
+        echo "" >&2
+        echo "Please install missing dependencies and try again" >&2
+        exit 1
+    fi
+}
 
 # Main function
 main() {
+    # Skip dependency validation for version and help commands
     case "${1:-}" in
+        "--version"|"version"|-V|"help"|"-h"|"--help"|"check"|"--check")
+            ;;
+        *)
+            validate_dependencies
+            # Acquire lock for commands that modify files
+            case "${1:-}" in
+                "update"|"clean"|"cleanup"|"recreate"|"create-template"|"template"|"repair"|"")
+                    if ! acquire_lock; then
+                        exit 1
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+    
+    case "${1:-}" in
+        "--version"|"version"|-V)
+            # Print version from package.json if available
+            local version="unknown"
+            if [[ -f "$SCRIPT_DIR/../package.json" ]]; then
+                # Try jq first for reliable JSON parsing
+                if command -v jq >/dev/null 2>&1; then
+                    version=$(jq -r '.version // "unknown"' "$SCRIPT_DIR/../package.json" 2>/dev/null || echo "unknown")
+                else
+                    # Fallback to grep/sed with better error handling
+                    version=$(grep '"version"' "$SCRIPT_DIR/../package.json" 2>/dev/null | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "unknown")
+                fi
+            fi
+            echo "claudux $version"
+            ;;
+        "check"|"--check")
+            check_function "show_header"
+            show_header
+            echo "🔎 Environment check"
+            echo ""
+            # Node version
+            if command -v node >/dev/null 2>&1; then
+                echo "• Node: $(node --version)"
+            else
+                warn "Node is not installed"
+            fi
+            # Claude CLI
+            if command -v claude >/dev/null 2>&1; then
+                echo "• Claude: $(claude --version)"
+                claude config get model 2>/dev/null || true
+            else
+                warn "Claude CLI not found. Install: npm install -g @anthropic-ai/claude-code"
+            fi
+            # Docs dir
+            if [[ -d "docs" ]]; then
+                echo "• docs/: present"
+            else
+                echo "• docs/: not present (will be created on first run)"
+            fi
+            ;;
         "update")
+            check_function "show_header"
+            check_function "check_claude"
+            check_function "update"
             show_header
             check_claude
             shift
             update "$@"
             ;;
         "clean"|"cleanup")
+            check_function "show_header"
+            check_function "cleanup_docs"
             show_header
             cleanup_docs
             ;;
         "recreate")
+            check_function "show_header"
+            check_function "check_claude"
+            check_function "recreate_docs"
             show_header
             check_claude
             shift
             recreate_docs "$@"
             ;;
         "serve"|"server"|"dev")
+            check_function "show_header"
+            check_function "serve"
             show_header
             serve
             ;;
@@ -86,6 +273,9 @@ main() {
             ;;
         "")
             # Default action: show interactive menu
+            check_function "show_header"
+            check_function "check_claude"
+            check_function "show_menu"
             show_header
             check_claude
             show_menu
@@ -101,8 +291,8 @@ main() {
     esac
 }
 
-# Handle errors gracefully
-trap 'echo ""; error_exit "Script interrupted" 130' INT TERM
+# Handle interrupts gracefully
+trap 'echo ""; echo "Script interrupted" >&2; kill 0; exit 130' INT TERM QUIT
 
 # Translate -v / -vv / -q into environment var consumed by formatter
 CLAUDUX_VERBOSE=${CLAUDUX_VERBOSE:-0}
@@ -122,4 +312,8 @@ done
 export CLAUDUX_VERBOSE
 
 # Run main function with filtered args
-main "${filtered_args[@]}"
+if [[ ${#filtered_args[@]} -eq 0 ]]; then
+  main
+else
+  main "${filtered_args[@]}"
+fi

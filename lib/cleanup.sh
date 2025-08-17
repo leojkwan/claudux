@@ -109,5 +109,9 @@ recreate_docs() {
     echo ""
     
     # Generate fresh docs and allow focused directive
-    update "${passthrough[@]}"
+    if [[ ${#passthrough[@]} -eq 0 ]]; then
+        update
+    else
+        update "${passthrough[@]}"
+    fi
 }

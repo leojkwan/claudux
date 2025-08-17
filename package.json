@@ -1,7 +1,7 @@
 {
   "name": "claudux",
   "version": "1.0.0",
-  "description": "AI-powered documentation generator using Claude Code",
+  "description": "AI-powered documentation generator for your codebase using Claude Code and VitePress",
   "main": "claudux",
   "bin": {
     "claudux": "./bin/claudux"
@@ -11,21 +11,40 @@
   },
   "keywords": [
     "documentation",
+    "docs",
+    "doc-generator",
     "ai",
+    "anthropic",
     "claude",
     "claude-code",
     "vitepress",
-    "generator"
+    "cli",
+    "static-site",
+    "developer-tools",
+    "link-check",
+    "cleanup"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leokwan/claudux.git"
+    "url": "git+https://github.com/leojkwan/claudux.git"
   },
+  "homepage": "https://github.com/leojkwan/claudux",
+  "bugs": {
+    "url": "https://github.com/leojkwan/claudux/issues"
+  },
+  "funding": "https://github.com/sponsors/leojkwan",
   "author": "Leo Kwan",
   "license": "MIT",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
+  "preferGlobal": true,
+  "files": [
+    "bin",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {},
   "devDependencies": {}
 }

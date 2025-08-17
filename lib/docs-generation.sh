@@ -39,10 +39,10 @@ build_generation_prompt() {
         fi
     done
     
-    # Project-specific coding patterns (claudux.md)
+    # Project-specific coding patterns (CLAUDE.md)
     local claudux_patterns=""
-    if [[ -f "claudux.md" ]]; then
-        claudux_patterns="claudux.md"
+    if [[ -f "CLAUDE.md" ]]; then
+        claudux_patterns="CLAUDE.md"
     fi
     
     # Build the prompt
@@ -153,7 +153,7 @@ Output your complete analysis and plan, then proceed to Phase 2.
 - Generate all planned documentation files
 - Use accurate, current code examples
 - Follow template structures exactly
-- Reference claudux.md for project-specific coding patterns and conventions when creating technical documentation
+- Reference CLAUDE.md for project-specific coding patterns and conventions when creating technical documentation
 - Ensure all internal links work
 - Add breadcrumb navigation at the top of EVERY page (except root):
   * Format: [Home](/) > [Section](/section/) > Current Page
@@ -287,7 +287,19 @@ update() {
     echo ""
     
     # Save prompt for debugging
-    echo "$prompt" > /tmp/claudux-prompt.txt
+    # Create unique temp files for this session
+    local prompt_file=$(mktemp /tmp/claudux-prompt-XXXXXX || mktemp)
+    local claude_log=$(mktemp /tmp/claudux-claude-XXXXXX || mktemp)
+    
+    # Ensure we got valid temp files
+    if [[ -z "$prompt_file" ]] || [[ -z "$claude_log" ]]; then
+        error_exit "Failed to create temporary files"
+    fi
+    
+    # Clean up temp files on exit
+    trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null" EXIT
+    
+    echo "$prompt" > "$prompt_file"
     
     # Run Claude with real-time output (no buffering)
     local claude_exit_code=0
@@ -298,7 +310,7 @@ update() {
             --model "$model" \
             --allowedTools "Read,Write,Edit,Delete" \
             --permission-mode acceptEdits \
-            "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+            "$prompt" 2>&1 | tee "$claude_log" | format_claude_output
         claude_exit_code=${PIPESTATUS[0]}
     else
         # Fallback without stdbuf
@@ -307,7 +319,7 @@ update() {
             --model "$model" \
             --allowedTools "Read,Write,Edit,Delete" \
             --permission-mode acceptEdits \
-            "$prompt" 2>&1 | tee /tmp/claudux-claude.log | format_claude_output
+            "$prompt" 2>&1 | tee "$claude_log" | format_claude_output
         claude_exit_code=${PIPESTATUS[0]}
     fi
     
@@ -317,9 +329,9 @@ update() {
     # Log Claude invocation result
     if [[ $claude_exit_code -ne 0 ]]; then
         warn "❌ Claude CLI exited with code: $claude_exit_code"
-        if [[ -f /tmp/claudux-claude.log ]]; then
+        if [[ -f "$claude_log" ]]; then
             warn "📋 Last output from Claude:"
-            tail -20 /tmp/claudux-claude.log | sed 's/^/   /'
+            tail -20 "$claude_log" | sed 's/^/   /'
         fi
     fi
     
@@ -349,7 +361,7 @@ update() {
                 # Attempt a single auto-fix pass: collect missing files and re-run with a focused directive
                 if [[ -z "$already_autofixed" ]]; then
                     # Re-run validator to collect machine-readable list
-                    local missing_tmp="/tmp/claudux-missing-files.txt"
+                    local missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
                     rm -f "$missing_tmp" 2>/dev/null || true
                     if "$LIB_DIR/validate-links.sh" --output "$missing_tmp" >/dev/null 2>&1; then
                         : # no-op; shouldn't happen because prior run failed
@@ -398,7 +410,7 @@ update() {
         echo "   3. Check internet connection"
         echo ""
         echo "   4. View full log:"
-        echo "      cat /tmp/claudux-claude.log"
+        echo "      Check Claude logs for details"
         echo ""
         echo "   5. Report issue:"
         echo "      https://github.com/anthropics/claude-code/issues"
