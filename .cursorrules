@@ -1,0 +1,20 @@
+# claudux cursor rules (short)
+
+Why: docs are generated. Manual edits get wiped, cause drift, and waste review time.
+
+Do:
+- Change generators/templates in `lib/**` and re-run claudux.
+  Examples: `lib/vitepress/config.template.ts`, `lib/docs-generation.sh`, `lib/ui.sh`, `lib/templates/**`.
+- Use CI-only override for GitHub Pages: `docs/.vitepress/config.pages.ts` with `vitepress build -c .vitepress/config.pages.ts`.
+
+Don’t:
+- Edit `docs/**` or `docs/.vitepress/**` directly.
+- Use env vars or `sed` to mutate the base path.
+
+Defaults:
+- Local/dev base: `/` in `docs/.vitepress/config.ts`.
+- This repo’s Pages base: `/claudux/` only via the CI override file above.
+- Branding: lowercase "claudux"; prefer single-line comments in source.
+- Cleanup: only remove stale docs, never source code.
+
+

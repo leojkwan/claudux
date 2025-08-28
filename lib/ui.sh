@@ -4,7 +4,7 @@
 # Show the main header
 show_header() {
     load_project_config
-    echo "📚 ClauDux - ${PROJECT_NAME} Documentation"
+    echo "📚 claudux - ${PROJECT_NAME} Documentation"
     echo "Powered by Claude AI - Everything stays local"
     echo ""
 }
@@ -209,23 +209,16 @@ show_help() {
     echo ""
     echo "🔧 Command line usage:"
     echo "  ./claudux                - Show interactive menu"
-    echo "  ./claudux update         - Update docs with cleanup"
+    echo "  ./claudux update         - Update docs (includes cleanup and validation)"
     echo "  ./claudux update -m \"message\""
     echo "                         - Update with a focused directive for Claude"
-    echo "  ./claudux update --with \"directive\" [--strict]"
-    echo "                         - Same as -m, --strict fails if links remain broken after auto-fix"
     echo "  ./claudux serve          - Start docs server (localhost:5173)"
-    echo "  ./claudux validate       - Check for broken links in docs"
-    echo "  ./claudux repair [-m \"message\"]"
-    echo "                         - Validate and auto-create missing pages using Claude"
-    echo "  ./claudux clean          - Clean up obsolete docs only"
     echo "  ./claudux recreate       - Start fresh (delete all docs)"
-    echo "  ./claudux create-template - Analyze codebase and generate CLAUDE.md"
+    echo "  ./claudux template       - Analyze codebase and generate CLAUDE.md"
     echo "  ./claudux help           - Show this help"
     echo ""
     echo "Options:"
     echo "  --with, -m               - Provide a high-level directive to guide generation"
-    echo "  --strict                 - Exit with error if links remain broken after auto-fix"
     echo "  -v / -vv                 - Increase verbosity (set CLAUDUX_VERBOSE=1/2)"
     echo "  -q                       - Quiet (errors only)"
     echo ""
@@ -311,11 +304,8 @@ show_menu() {
             "Update docs                (regenerate from code)" \
             "Update (focused)           (enter directive → update)" \
             "Serve                      (vitepress dev server)" \
-            "Validate links             (test all doc links)" \
-            "Repair links               (validate and auto-fix)" \
-            "Clean obsolete             (rm stale .md files)" \
             "Create CLAUDE.md           (AI context file)" \
-            "Recreate                   (rm -rf docs && update)" \
+            "Recreate                   (start fresh)" \
             "Exit"
         do
             case $choice in
@@ -339,27 +329,12 @@ show_menu() {
                     serve
                     break
                     ;;
-                "Validate links             (test all doc links)")
-                    echo ""
-                    validate_links
-                    break
-                    ;;
-                "Repair links               (validate and auto-fix)")
-                    echo ""
-                    validate_links --auto-fix
-                    break
-                    ;;
-                "Clean obsolete             (rm stale .md files)")
-                    echo ""
-                    cleanup_docs
-                    break
-                    ;;
                 "Create CLAUDE.md           (AI context file)")
                     echo ""
                     create_claudux_md
                     break
                     ;;
-                "Recreate                   (rm -rf docs && update)")
+                "Recreate                   (start fresh)")
                     echo ""
                     recreate_docs
                     break
@@ -377,5 +352,5 @@ show_menu() {
     
     # Footer hint
     echo ""
-    echo "→ ./claudux --help"
+    echo "Run 'claudux --help' for help."
 }

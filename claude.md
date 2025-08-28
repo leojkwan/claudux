@@ -131,7 +131,7 @@ print_color "YELLOW" "⚠️ Warning"
 - `NO_COLOR`: Disable colored output
 
 ### Configuration Files
-- **Project config**: `docs-ai-config.json` in project root
+- **Project config**: `claudux.json` in project root
 - **Docs map**: `docs-map.md` for structure planning
 - **VitePress config**: `docs/.vitepress/config.ts`
 

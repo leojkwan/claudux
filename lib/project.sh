@@ -1,15 +1,15 @@
 #!/bin/bash
 # Project detection and configuration utilities
 
-# Load project configuration from docs-ai-config.json or .claudux.json
+# Load project configuration from claudux.json or .claudux.json
 load_project_config() {
     PROJECT_NAME="Your Project"
     PROJECT_TYPE="generic"
     
-    # Try docs-ai-config.json first
-    if [[ -f "docs-ai-config.json" ]] && command -v jq &> /dev/null; then
-        PROJECT_NAME=$(jq -r '.project.name // "Your Project"' docs-ai-config.json 2>/dev/null || echo "Your Project")
-        PROJECT_TYPE=$(jq -r '.project.type // "generic"' docs-ai-config.json 2>/dev/null || echo "generic")
+    # Try claudux.json first
+    if [[ -f "claudux.json" ]] && command -v jq &> /dev/null; then
+        PROJECT_NAME=$(jq -r '.project.name // "Your Project"' claudux.json 2>/dev/null || echo "Your Project")
+        PROJECT_TYPE=$(jq -r '.project.type // "generic"' claudux.json 2>/dev/null || echo "generic")
     # Fallback to .claudux.json
     elif [[ -f ".claudux.json" ]]; then
         if command -v jq &> /dev/null; then

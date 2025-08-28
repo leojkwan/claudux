@@ -11,7 +11,7 @@ Start with the in-repo docs for a full overview:
 Quick local setup:
 
 ```bash
-git clone https://github.com/leokwan/claudux.git
+git clone https://github.com/leojkwan/claudux.git
 cd claudux
 npm i -g claudux  # optional: link globally
 

@@ -1,9 +1,15 @@
 /* @ts-nocheck */
-import { defineConfig } from 'vitepress'
+const defineConfig = (config: any) => config
 
 export default defineConfig({
   title: '{{PROJECT_NAME}}',
   description: '{{PROJECT_DESCRIPTION}}',
+  base: '/',
+  
+  // Ignore localhost links during static builds (they work fine in dev)
+  ignoreDeadLinks: [
+    /^https?:\/\/localhost/
+  ],
   
   // Enhanced head configuration
   head: [
@@ -154,7 +160,7 @@ export default defineConfig({
 
   // Sitemap generation
   sitemap: {
-    hostname: 'https://localhost:5173'
+    hostname: '{{SITE_URL}}'
   },
 
   // PWA support

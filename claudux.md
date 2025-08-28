@@ -121,9 +121,9 @@ Configuration is loaded from JSON files with **graceful fallbacks**:
 
 ```bash
 # lib/project.sh:9-21
-if [[ -f "docs-ai-config.json" ]] && command -v jq &> /dev/null; then
-    PROJECT_NAME=$(jq -r '.project.name // "Your Project"' docs-ai-config.json 2>/dev/null || echo "Your Project")
-    PROJECT_TYPE=$(jq -r '.project.type // "generic"' docs-ai-config.json 2>/dev/null || echo "generic")
+if [[ -f "claudux.json" ]] && command -v jq &> /dev/null; then
+    PROJECT_NAME=$(jq -r '.project.name // "Your Project"' claudux.json 2>/dev/null || echo "Your Project")
+    PROJECT_TYPE=$(jq -r '.project.type // "generic"' claudux.json 2>/dev/null || echo "generic")
 elif [[ -f ".claudux.json" ]]; then
     # Fallback to alternative config
     # ...
@@ -293,7 +293,7 @@ Dependencies are checked only when needed:
 
 ```bash
 # lib/project.sh:10
-if [[ -f "docs-ai-config.json" ]] && command -v jq &> /dev/null; then
+if [[ -f "claudux.json" ]] && command -v jq &> /dev/null; then
     # Only use jq if it exists
 ```
 
