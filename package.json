@@ -44,7 +44,5 @@
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {
-    "claudux": "^1.0.2"
-  }
+  "dependencies": {}
 }
