@@ -34,3 +34,4 @@ documents/.cursorrules
 # Editor and tooling
 .cursorrules
 documents/
+.npmrc
