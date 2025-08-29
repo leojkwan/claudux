@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "Your Rails App",
+    "type": "rails",
+    "language": "Ruby",
+    "build_system": "bundler",
+    "framework": "Rails 7+",
+    "ruby_version": "3.2+",
+    "description": "Ruby on Rails web application"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "gemfile": "Gemfile",
+    "routes": "config/routes.rb",
+    "database_config": "config/database.yml",
+    "application_config": "config/application.rb",
+    "models_dir": "app/models",
+    "controllers_dir": "app/controllers",
+    "views_dir": "app/views",
+    "migrations_dir": "db/migrate",
+    "api_dir": "app/controllers/api"
+  },
+  "features": {
+    "database": {
+      "orm": "ActiveRecord",
+      "default": "postgresql"
+    },
+    "testing": {
+      "enabled": true,
+      "framework": "rspec",
+      "fixtures": "factory_bot"
+    },
+    "api": {
+      "enabled": true,
+      "format": "json",
+      "authentication": "devise/jwt"
+    },
+    "frontend": {
+      "framework": "hotwire/stimulus",
+      "asset_pipeline": "propshaft"
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "MVC architecture and conventions",
+      "Database models and associations",
+      "RESTful routes and controllers",
+      "ActiveRecord migrations",
+      "API endpoints and serializers"
+    ],
+    "preservation_rules": [
+      "Keep existing Rails patterns",
+      "Preserve database schema docs",
+      "Maintain deployment guides"
+    ],
+    "update_triggers": [
+      "New models or migrations",
+      "Routes.rb changes",
+      "Controller updates",
+      "API endpoint changes",
+      "Gem additions"
+    ]
+  }
+}

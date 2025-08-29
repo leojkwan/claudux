@@ -1,0 +1,277 @@
+#!/bin/bash
+
+# VitePress Configuration Setup Script
+# Links external config to docs directory so it survives regeneration
+
+# Don't exit on errors - handle them gracefully
+
+echo "🔧 Setting up VitePress configuration..."
+
+# Ensure docs directory exists
+mkdir -p docs
+
+# Create .vitepress directory in docs if it doesn't exist
+mkdir -p docs/.vitepress
+
+# Link the external config files to docs/.vitepress
+echo "📁 Setting up configuration files..."
+
+# Get the directory where this script is located
+# Handle both symlinks and direct execution (npm installations)
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    # Script is a symlink, resolve it
+    SCRIPT_PATH="$(readlink "${BASH_SOURCE[0]}")"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+else
+    # Script is not a symlink
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+fi
+
+# LIB_DIR is the parent of vitepress directory
+LIB_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Check if config.ts exists (normally generated during docs update)
+if [ -f "docs/.vitepress/config.ts" ]; then
+    echo "   ✅ config.ts found"
+else
+    echo "   ℹ️  config.ts not found - creating minimal config for dev"
+    # Create a minimal config for serve command when docs aren't generated yet
+    cat > "docs/.vitepress/config.ts" << 'EOF'
+import { defineConfig } from 'vitepress'
+
+export default defineConfig({
+  title: 'Documentation',
+  description: 'Project documentation',
+  themeConfig: {
+    outline: { level: [2, 3], label: 'On this page' },
+    sidebar: [],
+    nav: []
+  }
+})
+EOF
+fi
+
+# Copy theme directory (remove existing first to prevent conflicts)
+if [ -d "$SCRIPT_DIR/theme" ]; then
+    rm -rf "docs/.vitepress/theme"
+    # Copy instead of symlink to avoid Vite serving allow list issues
+    cp -r "$SCRIPT_DIR/theme" "docs/.vitepress/theme"
+    echo "   ✅ theme/ directory copied"
+else
+    echo "   ❌ theme/ directory not found at $SCRIPT_DIR/theme"
+fi
+
+# Copy vite.config.js to prevent PostCSS conflicts
+if [ -f "$SCRIPT_DIR/vite.config.js" ]; then
+    cp "$SCRIPT_DIR/vite.config.js" "docs/vite.config.js"
+    echo "   ✅ vite.config.js copied (PostCSS isolation)"
+fi
+
+# Copy postcss.config.js to override parent project's PostCSS config
+if [ -f "$SCRIPT_DIR/postcss.config.js" ]; then
+    cp "$SCRIPT_DIR/postcss.config.js" "docs/postcss.config.js"
+    echo "   ✅ postcss.config.js copied (prevents parent config loading)"
+fi
+
+# Update package.json to include TypeScript dependencies
+echo "📦 Updating package.json with TypeScript support..."
+
+# Load project configuration for generic package.json
+load_project_config() {
+    PROJECT_NAME="Your Project"
+    PROJECT_TYPE="generic"
+    
+    # Try claudux.json first
+    if [[ -f "claudux.json" ]] && command -v jq &> /dev/null; then
+        PROJECT_NAME=$(jq -r '.project.name // "Your Project"' claudux.json 2>/dev/null)
+        PROJECT_TYPE=$(jq -r '.project.type // "generic"' claudux.json 2>/dev/null)
+    # Fallback to .claudux.json
+    elif [[ -f ".claudux.json" ]] && command -v jq &> /dev/null; then
+        PROJECT_NAME=$(jq -r '.name // "Your Project"' .claudux.json 2>/dev/null)
+    # Manual detection from directory name
+    elif [[ -z "$PROJECT_NAME" || "$PROJECT_NAME" == "Your Project" ]]; then
+        PROJECT_NAME=$(basename "$(pwd)" | sed 's/-/ /g' | sed 's/_/ /g')
+    fi
+    
+    # Sanitize for package name (lowercase, no spaces)
+    PACKAGE_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+}
+
+# Load configuration
+load_project_config
+
+# Auto-detect and copy logo files for VitePress
+detect_and_setup_logo() {
+    echo "🎨 Detecting project logo/icon..."
+    
+    # Create docs/public directory for assets
+    mkdir -p docs/public
+    
+    # iOS Projects - Look for app icons and logos
+    if [[ "$PROJECT_TYPE" == "ios" ]]; then
+        # Use find for more reliable logo detection
+        LOGO_WITH_TYPE=$(find . -name "LogoWithType.jpg" -o -name "LogoWithType.png" | head -1)
+        APP_ICON_1024=$(find . -name "1024.jpg" -path "*/AppIcon.appiconset/*" -o -name "1024.png" -path "*/AppIcon.appiconset/*" | head -1)
+        
+        if [[ -n "$LOGO_WITH_TYPE" ]]; then
+            cp "$LOGO_WITH_TYPE" "docs/public/logo.${LOGO_WITH_TYPE##*.}"
+            echo "   ✅ Found $(basename "$LOGO_WITH_TYPE") → copied to docs/public/logo.${LOGO_WITH_TYPE##*.}"
+        elif [[ -n "$APP_ICON_1024" ]]; then
+            cp "$APP_ICON_1024" "docs/public/logo.${APP_ICON_1024##*.}"
+            echo "   ✅ Found AppIcon $(basename "$APP_ICON_1024") → copied to docs/public/logo.${APP_ICON_1024##*.}"
+        fi
+    fi
+    
+    # Web Projects - Look for common logo files
+    for logo_path in "public/logo.svg" "public/logo.png" "public/logo.jpg" "src/assets/logo.svg" "src/assets/logo.png" "assets/logo.svg" "logo.svg" "logo.png"; do
+        if [[ -f "$logo_path" ]]; then
+            cp "$logo_path" "docs/public/$(basename "$logo_path")"
+            echo "   ✅ Found $logo_path → copied to docs/public/"
+            break
+        fi
+    done
+    
+    # Check what we have now
+    if [[ -f "docs/public/logo.jpg" || -f "docs/public/logo.png" || -f "docs/public/logo.svg" ]]; then
+        echo "   🎉 Logo detection successful!"
+        return 0
+    else
+        echo "   ℹ️  No logo found - will use default VitePress icon"
+        # Don't fail if no logo found - it's optional
+        return 0
+    fi
+}
+
+# Detect and setup logo
+detect_and_setup_logo
+
+# Configure VitePress with dynamic project info
+configure_vitepress() {
+    echo "⚙️  Configuring VitePress with project details..."
+    
+    # Determine logo path; do NOT default to icon.svg. If none, leave empty.
+    LOGO_PATH=""
+    if [[ -f "docs/public/logo.svg" ]]; then
+        LOGO_PATH="/logo.svg"
+    elif [[ -f "docs/public/logo.png" ]]; then
+        LOGO_PATH="/logo.png"
+    elif [[ -f "docs/public/logo.jpg" ]]; then
+        LOGO_PATH="/logo.jpg"
+    fi
+    
+    # Determine project description
+    PROJECT_DESCRIPTION="$PROJECT_NAME documentation"
+    if [[ "$PROJECT_TYPE" == "ios" ]]; then
+        PROJECT_DESCRIPTION="$PROJECT_NAME - iOS app documentation"
+    elif [[ "$PROJECT_TYPE" == "react" ]]; then
+        PROJECT_DESCRIPTION="$PROJECT_NAME - React app documentation"
+    elif [[ "$PROJECT_TYPE" == "nodejs" ]]; then
+        PROJECT_DESCRIPTION="$PROJECT_NAME - Node.js project documentation"
+    fi
+    
+    # Site URL for sitemap
+    SITE_URL="https://localhost:3000"
+    if [[ -f "claudux.json" ]] && command -v jq &> /dev/null; then
+        configured_url=$(jq -r '.deployment.siteUrl // null' claudux.json 2>/dev/null)
+        if [[ "$configured_url" != "null" && "$configured_url" != "" ]]; then
+            SITE_URL="$configured_url"
+        fi
+    fi
+    
+    # Respect existing config.ts generated by the docs generator.
+    # Only perform in-place placeholder substitution if placeholders are present.
+    # Use portable sed that works on both macOS and Linux
+    if [[ -f "docs/.vitepress/config.ts" ]]; then
+        local sed_cmd="sed -i"
+        # macOS sed requires empty string after -i
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed_cmd="sed -i ''"
+        fi
+        
+        if grep -q "{{PROJECT_NAME}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+            $sed_cmd "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "docs/.vitepress/config.ts"
+        fi
+        # Handle optional logo line and favicon tag placeholders
+        if [[ -n "$LOGO_PATH" ]]; then
+            # Replace logo config line and insert favicon tag
+            if grep -q "{{LOGO_CONFIG_LINE}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "s|{{LOGO_CONFIG_LINE}}|logo: { src: '$LOGO_PATH', width: 24, height: 24 },|g" "docs/.vitepress/config.ts"
+            fi
+            if grep -q "{{FAVICON_TAG}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "s|{{FAVICON_TAG}}|['link', { rel: 'icon', type: 'image/svg+xml', href: '$LOGO_PATH' }],|g" "docs/.vitepress/config.ts"
+            fi
+        else
+            # Remove logo line and favicon tag placeholder entirely
+            if grep -q "{{LOGO_CONFIG_LINE}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "s|{{LOGO_CONFIG_LINE}}||g" "docs/.vitepress/config.ts"
+            fi
+            if grep -q "{{FAVICON_TAG}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "s|{{FAVICON_TAG}}||g" "docs/.vitepress/config.ts"
+            fi
+
+            # Also remove any hardcoded icon/favicon or logo lines if present
+            if grep -q "\['link', { rel: 'icon'" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "/\['link', { rel: 'icon'.*}\],/d" "docs/.vitepress/config.ts"
+            fi
+            if grep -q "logo: { src: '/icon.svg'" "docs/.vitepress/config.ts" 2>/dev/null; then
+                $sed_cmd "/logo: { src: '\/icon.svg'.*},/d" "docs/.vitepress/config.ts"
+            fi
+        fi
+        if grep -q "{{PROJECT_DESCRIPTION}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+            $sed_cmd "s/{{PROJECT_DESCRIPTION}}/$PROJECT_DESCRIPTION/g" "docs/.vitepress/config.ts"
+        fi
+
+        if grep -q "{{SITE_URL}}" "docs/.vitepress/config.ts" 2>/dev/null; then
+            $sed_cmd "s|{{SITE_URL}}|$SITE_URL|g" "docs/.vitepress/config.ts"
+        fi
+    fi
+}
+
+# Configure VitePress
+configure_vitepress
+
+# Create dynamic package.json with project info
+cat > docs/package.json << EOF
+{
+  "name": "${PACKAGE_NAME}-docs",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "${PROJECT_NAME} documentation with enhanced VitePress configuration",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:build:pages": "DOCS_BASE=/claudux/ vitepress build",
+    "docs:preview": "vitepress preview",
+    "docs:setup": "../.vitepress-config/setup.sh"
+  },
+  "devDependencies": {
+    "vitepress": "^1.4.5",
+    "typescript": "^5.0.0",
+    "vue": "^3.4.0"
+  }
+}
+EOF
+
+echo "   ✅ package.json updated with TypeScript support"
+
+# Dependencies will be installed by claudux
+echo "   ✅ Ready for dependency installation"
+
+echo ""
+echo "🎉 VitePress configuration setup complete!"
+echo ""
+echo "Features enabled:"
+echo "  ✅ Left sidebar navigation with emoji icons"
+echo "  ✅ Breadcrumb navigation system"
+echo "  ✅ Enhanced search functionality"
+echo "  ✅ Optimized layout using all screen real estate"
+echo "  ✅ Dark/light mode with enhanced styling"
+echo "  ✅ Mobile-responsive design"
+echo "  ✅ Accessibility improvements"
+echo "  ✅ TypeScript support"
+echo ""
+echo "🚀 Start the enhanced documentation server:"
+echo "   cd docs && npm run docs:dev"
+echo ""
+echo "📝 To regenerate docs:"
+echo "   Run claudux from your project root" 

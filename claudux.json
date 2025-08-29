@@ -1,0 +1,7 @@
+{
+  "project": {
+    "name": "claudux",
+    "type": "javascript",
+    "description": "AI-powered documentation generator using Claude Code and VitePress"
+  }
+}

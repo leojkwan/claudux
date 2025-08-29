@@ -1,0 +1,35 @@
+# Documentation (commit the docs site so Pages can build)
+# If you want to keep docs untracked locally, use a personal excludes file instead.
+# .git/info/exclude → docs/
+
+# Ignore docs build artifacts and local deps
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/node_modules/
+docs/package-lock.json
+
+# Node modules (if VitePress is installed locally)
+node_modules/
+
+# VitePress cache
+.vitepress/cache/
+.vitepress/dist/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Site plan (generated)
+docs-site-plan.json
+
+# Local docs and release notes (do not publish)
+documents/.cursorrules
+
+# Editor and tooling
+.cursorrules

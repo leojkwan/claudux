@@ -1,0 +1,72 @@
+{
+  "project": {
+    "name": "Your Go Project",
+    "type": "go",
+    "language": "Go",
+    "build_system": "go mod",
+    "go_version": "1.21+",
+    "description": "Go application or service"
+  },
+  "ai": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "default_mode": "interactive",
+    "timeout_seconds": 120
+  },
+  "documentation": {
+    "framework": "vitepress",
+    "source_dir": "docs",
+    "config_file": "docs/.vitepress/config.mjs",
+    "serve_port": 5173,
+    "serve_command": "npm run docs:dev"
+  },
+  "files": {
+    "main_file": "main.go",
+    "go_mod": "go.mod",
+    "cmd_dir": "cmd",
+    "pkg_dir": "pkg",
+    "internal_dir": "internal",
+    "api_dir": "api",
+    "config_dir": "config",
+    "scripts_dir": "scripts"
+  },
+  "features": {
+    "testing": {
+      "enabled": true,
+      "framework": "testing",
+      "coverage": true,
+      "benchmarks": true
+    },
+    "build": {
+      "dockerfile": true,
+      "makefile": true,
+      "ci_cd": "github_actions"
+    },
+    "api": {
+      "framework": "gin/echo/fiber",
+      "swagger": true,
+      "grpc": false
+    }
+  },
+  "claude_instructions": {
+    "focus_areas": [
+      "Package structure and organization",
+      "API endpoints and handlers",
+      "Database models and migrations",
+      "Error handling patterns",
+      "Testing and benchmarks"
+    ],
+    "preservation_rules": [
+      "Keep existing API examples",
+      "Preserve configuration documentation",
+      "Maintain deployment guides"
+    ],
+    "update_triggers": [
+      "New packages or modules",
+      "API endpoint changes",
+      "Database schema updates",
+      "Configuration changes",
+      "New command-line tools"
+    ]
+  }
+}
