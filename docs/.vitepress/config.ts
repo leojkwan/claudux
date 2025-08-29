@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'claudux',
   description: 'AI-powered documentation generator for your codebase using Claude Code and VitePress',
-  base: (process.env.DOCS_BASE as string) || '/',
+  base: process.env.DOCS_BASE || '/',
   
   // Ignore localhost links during static builds
   ignoreDeadLinks: [

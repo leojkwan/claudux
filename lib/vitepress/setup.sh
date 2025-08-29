@@ -247,7 +247,8 @@ cat > docs/package.json << EOF
   "devDependencies": {
     "vitepress": "^1.4.5",
     "typescript": "^5.0.0",
-    "vue": "^3.4.0"
+    "vue": "^3.4.0",
+    "@types/node": "^18.0.0"
   }
 }
 EOF

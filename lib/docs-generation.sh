@@ -76,6 +76,11 @@ build_generation_prompt() {
 - Read $claudux_patterns for project-specific coding patterns, conventions, and architectural guidelines"
     fi
     
+    if [[ -n "$claudux_prefs" ]]; then
+        prompt+="
+- Read $claudux_prefs for documentation site preferences: sections to include/omit, nav items and order, sidebar policy (unified '/' vs per-section), outline depth, page naming/ordering conventions, logo policy, base path policy (dev '/' with CI via DOCS_BASE), and link rules (no placeholders)"
+    fi
+    
     prompt+="
 
 **STEP 2: Analyze Codebase**
@@ -129,6 +134,7 @@ build_generation_prompt() {
    - IMPORTANT: Reference sidebar-example.md for proper sidebar configuration
    - Build nested sidebar navigation that matches your documentation hierarchy
    - Use consistent patterns for section organization
+   - Apply preferences from claudux.md when present (nav items and order, sections include/omit, sidebar policy, outline depth, naming/emoji policy)
    
    The config MUST include:
    - Dynamic sidebar object matching your doc structure
@@ -204,6 +210,7 @@ VitePress Routing Rules:
 - Preserve valuable existing content
 
 - Respect project-specific conventions from CLAUDE.md if present
+- Respect site preferences from claudux.md if present
 
 **REMOVE Obsolete Files** (95%+ confidence only):
 - Delete files referencing non-existent code
@@ -217,7 +224,8 @@ VitePress Routing Rules:
 - No hypothetical or placeholder content
 - Follow project's coding standards and conventions
 - Use terminology consistent with the project's domain
-- Respect any custom documentation patterns in CLAUDE.md"
+- Respect any custom documentation patterns in CLAUDE.md
+- Follow documentation site preferences in claudux.md if present"
     
     # Append user directive if provided
     if [[ -n "$user_directive" ]]; then
@@ -423,9 +431,9 @@ update() {
             # Replace base path with environment-aware setting
             if grep -q "base:" "docs/.vitepress/config.ts" 2>/dev/null; then
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s/base:[[:space:]]*[^,]*/base: (process.env.DOCS_BASE as string) || '\/'/g" "docs/.vitepress/config.ts"
+                    sed -i '' "s/base:[[:space:]]*[^,]*/base: process.env.DOCS_BASE || '\/'/g" "docs/.vitepress/config.ts"
                 else
-                    sed -i "s/base:[[:space:]]*[^,]*/base: (process.env.DOCS_BASE as string) || '\/'/g" "docs/.vitepress/config.ts"
+                    sed -i "s/base:[[:space:]]*[^,]*/base: process.env.DOCS_BASE || '\/'/g" "docs/.vitepress/config.ts"
                 fi
             fi
         fi
