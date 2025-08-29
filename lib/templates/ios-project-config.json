@@ -9,7 +9,7 @@
   
   "ai_configuration": {
     "style_guide": ".ai-docs-style.md",
-    "default_model": "opus",
+    "default_model": "sonnet",
     "fast_model": "sonnet", 
     "default_mode": "interactive",
     "timeout_seconds": 120

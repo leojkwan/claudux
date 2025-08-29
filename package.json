@@ -1,6 +1,6 @@
 {
   "name": "claudux",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI-powered documentation generator for your codebase using Claude Code and VitePress",
   "main": "claudux",
   "bin": {
@@ -44,6 +44,7 @@
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "claudux": "^1.0.2"
+  }
 }

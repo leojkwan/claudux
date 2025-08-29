@@ -43,7 +43,7 @@ Use 'rm' command to delete files with clear explanations."
         --permission-mode acceptEdits \
         --allowedTools "Read,Write,Bash" \
         --verbose \
-        --model "${FORCE_MODEL:-opus}"
+        --model "${FORCE_MODEL:-sonnet}"
     
     local exit_code=$?
     echo ""
@@ -87,10 +87,15 @@ recreate_docs() {
     
     # Remove docs directory
     if [[ -d "docs" ]]; then
-        if rm -rf docs/; then
-            success "   ✅ Removed docs/ directory"
+        # Force remove, ignoring errors
+        rm -rf docs/ 2>/dev/null || true
+        
+        # Check if it was actually removed
+        if [[ -d "docs" ]]; then
+            # Directory still exists, this is a real problem
+            error_exit "Failed to remove docs/ directory. Check permissions or if files are in use."
         else
-            error_exit "Failed to remove docs/ directory"
+            success "   ✅ Removed docs/ directory"
         fi
     fi
     

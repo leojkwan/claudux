@@ -20,7 +20,7 @@ check_claude() {
 
 # Get model name and settings
 get_model_settings() {
-    local model="${FORCE_MODEL:-opus}"
+    local model="${FORCE_MODEL:-sonnet}"
     local model_name=""
     local timeout_msg=""
     local cost_estimate=""
@@ -140,6 +140,14 @@ format_claude_output_stream() {
     local verbose_level=1
     local line
     local delta_preview_chars=180
+    local current_phase=1
+    local printed_phase1=0
+    local printed_phase2=0
+    local reads=0
+    local creates=0
+    local updates=0
+    local writes=0
+    local deletes=0
 
     while IFS= read -r line; do
         # Emit heartbeat for init messages so users see early activity
@@ -151,6 +159,11 @@ format_claude_output_stream() {
                 print_color "BLUE" "   🔄 Session started • Model: $init_model"
             else
                 print_color "BLUE" "   🔄 Session started"
+            fi
+            if [[ $printed_phase1 -eq 0 ]]; then
+                echo ""
+                print_color "CYAN" "━━━ Phase 1: Analysis & Planning ━━━"
+                printed_phase1=1
             fi
             continue
         fi
@@ -189,10 +202,49 @@ format_claude_output_stream() {
         local path
         path=$(echo "$line" | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
-        # Detect file write/create/update events heuristically
-        if echo "$line" | grep -qE 'file_(write|create|update)|"action"\s*:\s*"(write|create|update)"|"op"\s*:\s*"(write|create|update)"'; then
+        # Detect file operations (read/write/create/update/delete)
+        if echo "$line" | grep -qE 'file_(read|write|create|update|delete)|"action"\s*:\s*"(read|write|create|update|delete)"|"op"\s*:\s*"(read|write|create|update|delete)"'; then
+            # Determine action
+            local action
+            action=$(echo "$line" | sed -n 's/.*"action"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            if [[ -z "$action" ]]; then
+                action=$(echo "$line" | sed -n 's/.*"op"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            fi
+            if [[ -z "$action" ]]; then
+                if echo "$line" | grep -q 'file_create'; then action="create"; fi
+                if echo "$line" | grep -q 'file_update'; then action="update"; fi
+                if echo "$line" | grep -q 'file_write'; then action="write"; fi
+                if echo "$line" | grep -q 'file_delete'; then action="delete"; fi
+                if echo "$line" | grep -q 'file_read'; then action="read"; fi
+            fi
+
+            # Phase switching on first mutating op
+            if [[ "$action" != "read" ]] && [[ $printed_phase2 -eq 0 ]]; then
+                echo ""
+                print_color "CYAN" "━━━ Phase 2: Documentation Generation ━━━"
+                printed_phase2=1
+                current_phase=2
+            fi
+
+            # Emit per-action logs and counts
+            if [[ "$action" == "read" ]]; then
+                ((reads++))
+                if [[ -n "$path" ]]; then
+                    printf "\r\033[K🔍 Analyzing: %s\n" "$path"
+                else
+                    printf "\r\033[K🔍 Analyzing...\n"
+                fi
+                continue
+            fi
+
             if [[ -n "$path" ]]; then
                 ((file_count++))
+                case "$action" in
+                    create) ((creates++)) ;;
+                    update) ((updates++)) ;;
+                    write)  ((writes++)) ;;
+                    delete) ((deletes++)) ;;
+                esac
                 printf "\r\033[K📝 Change [%d]: %s\n" "$file_count" "$path"
                 continue
             fi
@@ -206,8 +258,65 @@ format_claude_output_stream() {
                 tool=$(echo "$line" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
             fi
             if [[ -n "$tool" ]] && echo "$line" | grep -qE 'tool|Tool|tool_use'; then
+                # Build a short blurb using common fields
+                local blurb=""
+                local cmd query pattern glob dir startLine endLine offset limit
+                cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                query=$(echo "$line" | sed -n 's/.*"query"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                pattern=$(echo "$line" | sed -n 's/.*"pattern"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                glob=$(echo "$line" | sed -n 's/.*"glob"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                dir=$(echo "$line" | sed -n 's/.*"dir"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                startLine=$(echo "$line" | sed -n 's/.*"startLine"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p')
+                endLine=$(echo "$line" | sed -n 's/.*"endLine"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p')
+                offset=$(echo "$line" | sed -n 's/.*"offset"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p')
+                limit=$(echo "$line" | sed -n 's/.*"limit"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p')
+
+                if [[ -n "$path" ]]; then
+                    blurb="file: $path"
+                fi
+                if [[ -n "$startLine" ]] && [[ -n "$endLine" ]]; then
+                    blurb="$blurb lines: $startLine-$endLine"
+                fi
+                if [[ -n "$offset" ]] && [[ -n "$limit" ]]; then
+                    blurb="$blurb window: $offset+$limit"
+                fi
+                if [[ -n "$glob" ]]; then
+                    blurb="glob: $glob"
+                    [[ -n "$dir" ]] && blurb="$blurb in $dir"
+                fi
+                if [[ -n "$pattern" ]]; then
+                    blurb="pattern: $pattern"
+                    [[ -n "$path" ]] && blurb="$blurb in $path"
+                fi
+                if [[ -n "$query" ]]; then
+                    blurb="query: $query"
+                fi
+                if [[ -n "$cmd" ]]; then
+                    blurb="cmd: $cmd"
+                fi
+                # Special-case: TodoWrite with todos preview/count
+                if echo "$tool" | grep -qi 'todowrite'; then
+                    local todos_count first_todo
+                    todos_count=$(echo "$line" | grep -o '"content"' | wc -l | tr -d ' ')
+                    first_todo=$(echo "$line" | sed -n 's/.*"content"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+                    if [[ -n "$todos_count" ]] && [[ "$todos_count" -gt 0 ]]; then
+                        blurb="todos: $todos_count"
+                        if [[ -n "$first_todo" ]]; then
+                            # Truncate preview
+                            if [[ ${#first_todo} -gt 80 ]]; then
+                                first_todo="${first_todo:0:77}..."
+                            fi
+                            blurb="$blurb • first: $first_todo"
+                        fi
+                    fi
+                fi
+
                 printf "\r\033[K"
-                print_color "CYAN" "🔧 Using tool: $tool"
+                if [[ -n "$blurb" ]]; then
+                    print_color "CYAN" "🔧 Using tool: $tool — $blurb"
+                else
+                    print_color "CYAN" "🔧 Using tool: $tool"
+                fi
                 continue
             fi
         fi
@@ -216,6 +325,21 @@ format_claude_output_stream() {
         local text
         text=$(echo "$line" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"\n]*\)".*/\1/p')
         if [[ -n "$text" ]]; then
+            # Detect Phase 2 marker from model text and synthesize banner once
+            if [[ $printed_phase2 -eq 0 ]]; then
+                local upper
+                upper=$(echo "$text" | tr '[:lower:]' '[:upper:]')
+                if echo "$upper" | grep -q 'PHASE 2'; then
+                    echo ""
+                    print_color "CYAN" "━━━ Phase 2: Documentation Generation ━━━"
+                    printed_phase2=1
+                    current_phase=2
+                    # Suppress the raw markdown phase header if that's what this line is
+                    if echo "$upper" | grep -qE '^\s*#{0,6}\s*PHASE\s*2\b|====\s*PHASE\s*2\b|PHASE\s*2\s*:\s*EXECUTE\s*THE\s*PLAN'; then
+                        continue
+                    fi
+                fi
+            fi
             # Unescape common sequences
             text=${text//\\n/$'\n'}
             text=${text//\\t/$'\t'}
@@ -234,8 +358,7 @@ format_claude_output_stream() {
 
     # Clear progress line and print summary
     printf "\r\033[K"
-    if [[ $file_count -gt 0 ]]; then
-        echo ""
-        success "📚 Processed $file_count files"
-    fi
+    echo ""
+    success "📚 Processed $file_count changes"
+    echo "   🔍 reads: $reads • 🆕 creates: $creates • ✏️ updates: $updates • 📝 writes: $writes • 🗑️ deletes: $deletes"
 }

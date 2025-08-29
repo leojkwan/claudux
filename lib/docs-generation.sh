@@ -45,6 +45,12 @@ build_generation_prompt() {
         claudux_patterns="CLAUDE.md"
     fi
     
+    # Documentation site preferences (claudux.md)
+    local claudux_prefs=""
+    if [[ -f "claudux.md" ]]; then
+        claudux_prefs="claudux.md"
+    fi
+    
     # Build the prompt
     local prompt="Analyze this ${project_type} project (${project_name}) and intelligently update the documentation following these guidelines:
 
@@ -117,9 +123,9 @@ build_generation_prompt() {
    - Enable 3-column layout with outline configuration
     - Generate proper VitePress configuration structure
    - Base path policy:
-     * Local/dev config (docs/.vitepress/config.ts) MUST use base: '/'
-     * Deployments can set base via DOCS_BASE env var (e.g., '/claudux/')
-     * CI workflow should export DOCS_BASE instead of mutating files
+     * Use environment-aware base: process.env.DOCS_BASE || '/'
+     * Local development defaults to '/' (no DOCS_BASE set)
+     * CI/deployment sets DOCS_BASE (e.g., '/claudux/' for GitHub Pages)
    - IMPORTANT: Reference sidebar-example.md for proper sidebar configuration
    - Build nested sidebar navigation that matches your documentation hierarchy
    - Use consistent patterns for section organization
@@ -158,6 +164,8 @@ DOCUMENTATION ACCURACY GUIDELINES:
   - Examples: Use real code examples from the actual codebase, not hypothetical ones
   - Adapt tone and structure to match the project's domain (e.g., enterprise vs open source)
   - Respect existing documentation conventions if updating an existing docs folder
+  - Verbosity is enabled by default; do NOT document verbose flags (e.g., -v/--verbose) or any CLAUDUX_VERBOSE env configuration
+  - Default AI model is Sonnet for speed; if you mention model selection, state that users can force Opus via FORCE_MODEL=opus when needed
 
 VITEPRESS CONFIGURATION BEST PRACTICES:
   - Only reference assets that exist in the project or that you're creating
@@ -323,6 +331,11 @@ update() {
         output_format_flag="--output-format stream-json"
         info "🔄 Streaming mode enabled for real-time progress"
     fi
+    # Choose formatter based on output mode support
+    local formatter="format_claude_output"
+    if [[ -n "$output_format_flag" ]]; then
+        formatter="format_claude_output_stream"
+    fi
     
     # Always be verbose when streaming JSON
     local verbose_flag="--verbose"
@@ -340,7 +353,7 @@ update() {
                 --permission-mode acceptEdits \
                 $verbose_flag \
                 $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | format_claude_output_stream &
+                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
         else
             ( claude \
                 --print \
@@ -349,7 +362,7 @@ update() {
                 --permission-mode acceptEdits \
                 $verbose_flag \
                 $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | format_claude_output_stream &
+                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
         fi
         local stream_pid=$!
 
@@ -376,15 +389,10 @@ update() {
         return $ec
     }
 
-    # Retry up to 3 times if there is no output in 20s
+    # Launch generation once
     claude_exit_code=1
-    for attempt in 1 2 3; do
-        info "🔄 Attempt $attempt - launching generation"
-        run_claude_once
-        claude_exit_code=$?
-        [[ $claude_exit_code -ne 124 ]] && break
-        warn "🔁 Retrying..."
-    done
+    run_claude_once
+    claude_exit_code=$?
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -410,19 +418,17 @@ update() {
         success "Documentation update complete!"
         echo ""
 
-        # Enforce dev base path in docs/.vitepress/config.ts and create CI override
+        # Update base path in docs/.vitepress/config.ts to use DOCS_BASE env var
         if [[ -f "docs/.vitepress/config.ts" ]]; then
-            # Replace any non-root base with '/'
+            # Replace base path with environment-aware setting
             if grep -q "base:" "docs/.vitepress/config.ts" 2>/dev/null; then
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s/base:[[:space:]]*'[^']*'/base: '\/'/" "docs/.vitepress/config.ts"
+                    sed -i '' "s/base:[[:space:]]*[^,]*/base: (process.env.DOCS_BASE as string) || '\/'/g" "docs/.vitepress/config.ts"
                 else
-                    sed -i "s/base:[[:space:]]*'[^']*'/base: '\/'/" "docs/.vitepress/config.ts"
+                    sed -i "s/base:[[:space:]]*[^,]*/base: (process.env.DOCS_BASE as string) || '\/'/g" "docs/.vitepress/config.ts"
                 fi
             fi
         fi
-
-        # CI override file no longer needed; use DOCS_BASE env instead
         
         # Validate links in generated documentation
         info "🔍 Step 3: Validating documentation links..."
@@ -482,7 +488,7 @@ update() {
         echo "      claude config get"
         echo ""
         echo "   2. Try with a different model:"
-        echo "      FORCE_MODEL=sonnet claudux update"
+        echo "      FORCE_MODEL=opus claudux update"
         echo ""
         echo "   3. Check internet connection"
         echo ""

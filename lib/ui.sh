@@ -9,19 +9,19 @@ show_header() {
     echo ""
 }
 
-# Create CLAUDE.md by analyzing actual codebase patterns
+# Create claudux.md (docs site preferences)
 create_claudux_md() {
     # Load project configuration first
     load_project_config
     
-    if [[ -f "CLAUDE.md" ]]; then
-        print_color "YELLOW" "⚠️  CLAUDE.md already exists!"
+    if [[ -f "claudux.md" ]]; then
+        print_color "YELLOW" "⚠️  claudux.md already exists!"
         echo ""
-        echo "Current file contains $(wc -l < CLAUDE.md) lines"
+        echo "Current file contains $(wc -l < claudux.md) lines"
         echo ""
-        read -p "❓ Overwrite existing CLAUDE.md? (y/N): " -r
+        read -p "❓ Overwrite existing claudux.md? (y/N): " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "📋 Keeping existing CLAUDE.md"
+            echo "📋 Keeping existing claudux.md"
             return 0
         fi
     fi
@@ -34,79 +34,49 @@ create_claudux_md() {
     # Get model settings
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
     
-    # Detect project type and select an appropriate reference template
-    local template_file
-    case "$PROJECT_TYPE" in
-        "ios")
-            template_file="$LIB_DIR/templates/ios-claude.md"
-            ;;
-        "nextjs")
-            template_file="$LIB_DIR/templates/nextjs-claude.md"
-            ;;
-        "react"|"javascript"|"nodejs")
-            template_file="$LIB_DIR/templates/generic-claude.md"
-            ;;
-        *)
-            template_file="$LIB_DIR/templates/generic-claude.md"
-            ;;
-    esac
-    
-    if [[ ! -f "$template_file" ]]; then
-        print_color "RED" "❌ Template reference file not found: $template_file"
-        return 1
-    fi
-    
-    print_color "BLUE" "🧠 Analyzing $PROJECT_NAME codebase to generate coding patterns..."
-    print_color "CYAN" "📋 Using $template_file as reference guide"
+    print_color "BLUE" "🧠 Analyzing $PROJECT_NAME to generate docs preferences..."
     echo ""
     
     # Create analysis prompt
-    local prompt="Analyze this $PROJECT_TYPE project ($PROJECT_NAME) and create a CLAUDE.md file containing AI coding assistant rules and instructions based on the actual patterns and conventions used in this codebase.
+    local prompt="Analyze this $PROJECT_TYPE project ($PROJECT_NAME) and create a claudux.md file that captures USER PREFERENCES for how the documentation website should be structured.
 
-**OBJECTIVE:**
-Create a CLAUDE.md file that tells AI assistants (Claude, Cursor, etc.) HOW to work with this codebase. This is NOT documentation - it's a set of rules and instructions for AI to follow when modifying or extending the code.
+PURPOSE:
+- claudux.md is a human-authored preferences file that guides documentation generation and VitePress layout. It is NOT the documentation itself.
 
-**FORMAT REQUIREMENTS:**
-The CLAUDE.md file should contain INSTRUCTIONS and RULES for AI assistants, structured like:
-- Project overview (2-3 sentences max) 
-- Key architecture decisions to respect
-- Code style rules (MUST follow, SHOULD follow)
-- Testing requirements (what tests to write, how to run them)
-- Common patterns to use (with examples from actual code)
-- Anti-patterns to avoid (what NOT to do)
-- Project-specific commands and workflows
-- File organization rules
-- Important constraints and gotchas
+DELIVERABLE: Write a new file named 'claudux.md' in the project root with concise, opinionated preferences. Use markdown with clear section headings and short bullet lists.
 
-**ANALYZE THE CODEBASE FOR:**
-- Actual naming conventions used (files, functions, variables)
-- Import/dependency patterns
-- Error handling approaches
-- State management patterns
-- Testing strategies and tools
-- Build and deployment processes
-- Code formatting rules (if any)
-- Security practices
+REQUIRED SECTIONS (keep concise):
+- Site
+  - title, description (1 line each)
+  - preferred nav items (top-level) with desired order
+  - logo policy (auto-detect | none)
+- Structure
+  - which sections to include (guide, features, technical, api, development, examples)
+  - which sections to omit
+  - sidebar policy (unified '/' sidebar vs per-section), depth levels, collapsed defaults
+- Pages
+  - must-have pages (e.g., /guide/index, /guide/installation, /features/index)
+  - page ordering rules (alphabetical | custom groups)
+  - naming conventions (Title Case, emoji usage yes/no)
+- Links
+  - internal link rules (use '/guide/' for index pages, avoid placeholders)
+  - external links to include in nav (GitHub, npm) if detectable
+- Policies
+  - base path policy (local '/' with CI override via DOCS_BASE)
+  - verbosity (be explicit, avoid placeholders), no broken links
+  - protected content guidance (do not edit notes/, private/, or <!-- skip --> sections)
 
-**OUTPUT STYLE:**
-Write as DIRECTIVES to an AI assistant. Use imperative mood. Examples:
-- \"ALWAYS use TypeScript strict mode\"
-- \"NEVER commit directly to main branch\"
-- \"When creating new components, follow the pattern in src/components/Button.tsx\"
-- \"Before modifying database schemas, check migrations in db/migrations/\"
-- \"Run 'npm test' before committing any changes\"
+GUIDELINES:
+- Derive sensible defaults from the codebase and package metadata when possible.
+- Keep preferences high-level and durable; avoid project-internal trivia.
+- Prefer single-line bullets; avoid long paragraphs.
 
-**IMPORTANT:**
-- Write rules based on ACTUAL patterns found in the code, not generic best practices
-- Include specific file paths and function names as examples
-- Make it actionable - every rule should guide AI behavior
-- Keep it concise - focus on what's unique or critical to this project
-
-Generate the CLAUDE.md file now."
+OUTPUT:
+- Create/overwrite 'claudux.md' with the preferences above."
     
     # Keep prompt minimal and code-driven; no user preference injection
     
-    info "🤖 Claude analyzing $PROJECT_NAME codebase..."
+    info "🤖 Claude analyzing $PROJECT_NAME..."
     info "🧠 Using $model_name"
     info "⏳ This will analyze your actual code patterns..."
     echo ""
@@ -117,21 +87,21 @@ Generate the CLAUDE.md file now."
         --model "$model" \
         --allowedTools "Read,Write,Edit,Delete" \
         --permission-mode acceptEdits \
+        --verbose \
         "$prompt"
     
     local claude_exit_code=$?
     
-    if [[ $claude_exit_code -eq 0 ]] && [[ -f "CLAUDE.md" ]]; then
-        local line_count=$(wc -l < CLAUDE.md)
-        print_color "GREEN" "✅ Generated project-specific CLAUDE.md ($line_count lines)"
+    if [[ $claude_exit_code -eq 0 ]] && [[ -f "claudux.md" ]]; then
+        local line_count=$(wc -l < claudux.md)
+        print_color "GREEN" "✅ Generated claudux.md (docs preferences) ($line_count lines)"
         echo ""
         echo "💡 Next steps:"
-        echo "  1. Review the generated patterns - they're based on your actual code"
-        echo "  2. Customize any patterns that need adjustment"
-        echo "  3. Run documentation update to use these patterns"
+        echo "  1. Review and adjust preferences as needed"
+        echo "  2. Run 'claudux update' to generate docs honoring these preferences"
         echo ""
     else
-        print_color "RED" "❌ Failed to analyze codebase with Claude"
+        print_color "RED" "❌ Failed to generate claudux.md with Claude"
         return 1
     fi
 }
@@ -214,18 +184,16 @@ show_help() {
     echo "                         - Update with a focused directive for Claude"
     echo "  ./claudux serve          - Start docs server (localhost:5173)"
     echo "  ./claudux recreate       - Start fresh (delete all docs)"
-    echo "  ./claudux template       - Analyze codebase and generate CLAUDE.md"
+    echo "  ./claudux template       - Generate claudux.md (docs preferences)"
     echo "  ./claudux help           - Show this help"
     echo ""
     echo "Options:"
     echo "  --with, -m               - Provide a high-level directive to guide generation"
-    echo "  -v / -vv                 - Increase verbosity (set CLAUDUX_VERBOSE=1/2)"
     echo "  -q                       - Quiet (errors only)"
     echo ""
     echo "Environment:"
-    echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: opus)"
+    echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: sonnet)"
     echo "  CLAUDUX_MESSAGE=...      - Default directive if -m/--with not provided"
-    echo "  CLAUDUX_VERBOSE=0|1|2    - Verbosity level (0 default)"
     echo ""
     echo "💡 The main update command automatically:"
     echo "  • Scans your codebase and updates docs"
@@ -263,7 +231,7 @@ show_menu() {
         select choice in \
             "Generate docs              (scan code → markdown)" \
             "Serve                      (vitepress dev server)" \
-            "Create CLAUDE.md           (AI context file)" \
+            "Create claudux.md           (docs preferences)" \
             "Exit"
         do
             case $choice in
@@ -277,7 +245,7 @@ show_menu() {
                     serve
                     break
                     ;;
-                "Create CLAUDE.md           (AI context file)")
+                "Create claudux.md           (docs preferences)")
                     echo ""
                     create_claudux_md
                     break
@@ -302,7 +270,7 @@ show_menu() {
             "Update docs                (regenerate from code)" \
             "Update (focused)           (enter directive → update)" \
             "Serve                      (vitepress dev server)" \
-            "Create CLAUDE.md           (AI context file)" \
+            "Create claudux.md           (docs preferences)" \
             "Recreate                   (start fresh)" \
             "Exit"
         do
@@ -327,7 +295,7 @@ show_menu() {
                     serve
                     break
                     ;;
-                "Create CLAUDE.md           (AI context file)")
+                "Create claudux.md           (docs preferences)")
                     echo ""
                     create_claudux_md
                     break
