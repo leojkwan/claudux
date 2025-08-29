@@ -5,6 +5,10 @@ Documentation generator that uses Claude AI to analyze your codebase and create 
 [![npm version](https://img.shields.io/npm/v/claudux.svg)](https://www.npmjs.com/package/claudux)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="./assets/readme-hero.png" alt="Claudux documentation site screenshot" width="100%" />
+</p>
+
 ## Install
 
 ```bash
