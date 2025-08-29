@@ -23,8 +23,8 @@ npm install -g claudux
 
 ```bash
 cd your-project
-claudux update    # Analyze code → generate docs
-claudux serve     # Preview at localhost:5173
+claudux          # Analyze code → generate docs
+claudux serve    # Preview at localhost:5173
 ```
 
 ## What it does

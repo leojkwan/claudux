@@ -27,6 +27,47 @@ if [ ! -d "docs" ]; then
     exit 1
 fi
 
+# Function to check for duplicate IDs in markdown files
+check_duplicate_ids() {
+    echo "🔍 Checking for duplicate heading IDs..."
+    local duplicate_found=false
+    
+    # Extract all {#id} patterns from markdown files
+    local temp_ids=$(mktemp)
+    find docs -name "*.md" -type f -exec grep -H -o '{#[^}]*}' {} \; 2>/dev/null | \
+        sed 's/{#\([^}]*\)}/\1/' > "$temp_ids" 2>/dev/null || true
+    
+    if [[ -s "$temp_ids" ]]; then
+        # Check for duplicates
+        local duplicates=$(cut -d: -f2 "$temp_ids" | sort | uniq -d)
+        if [[ -n "$duplicates" ]]; then
+            echo "❌ Duplicate heading IDs found:"
+            while IFS= read -r duplicate_id; do
+                if [[ -n "$duplicate_id" ]]; then
+                    echo "   ID '$duplicate_id' appears in:"
+                    grep -H "{#$duplicate_id}" docs/*.md docs/**/*.md 2>/dev/null | sed 's/^/     /'
+                fi
+            done <<< "$duplicates"
+            duplicate_found=true
+        fi
+    fi
+    
+    rm -f "$temp_ids" 2>/dev/null
+    
+    if [[ "$duplicate_found" == "true" ]]; then
+        echo "❌ Fix duplicate IDs before continuing"
+        return 1
+    else
+        echo "✅ No duplicate heading IDs found"
+        return 0
+    fi
+}
+
+# Run duplicate ID check first
+if ! check_duplicate_ids; then
+    exit 1
+fi
+
 # Locate VitePress config (support .ts/.mjs/.js)
 CONFIG_FILE=""
 for f in docs/.vitepress/config.ts docs/.vitepress/config.mjs docs/.vitepress/config.js; do

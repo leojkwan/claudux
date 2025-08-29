@@ -225,7 +225,9 @@ VitePress Routing Rules:
 - Follow project's coding standards and conventions
 - Use terminology consistent with the project's domain
 - Respect any custom documentation patterns in CLAUDE.md
-- Follow documentation site preferences in claudux.md if present"
+- Follow documentation site preferences in claudux.md if present
+- **CRITICAL: Ensure all heading IDs are unique** - no duplicate {#id} attributes within or across files
+- Use descriptive, hierarchical IDs (e.g., {#platform-android-issues} instead of {#android} twice)"
     
     # Append user directive if provided
     if [[ -n "$user_directive" ]]; then
