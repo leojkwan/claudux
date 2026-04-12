@@ -53,10 +53,13 @@ $ claudux update
 
 ```bash
 claudux                 # Interactive menu
-claudux update          # Generate/update docs  
+claudux update          # Generate/update docs
 claudux update -m "..." # Update with specific focus
 claudux serve           # Start dev server
 claudux recreate        # Delete docs and start over
+claudux template        # Generate claudux.md (docs preferences)
+claudux check           # Verify environment (Node, Claude CLI, docs)
+claudux --version       # Show installed version
 claudux --help          # Full options
 ```
 
