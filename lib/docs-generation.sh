@@ -1,6 +1,76 @@
 #!/bin/bash
 # Documentation generation and update functions
 
+STATE_FILE=".claudux-state.json"
+
+# Save a change-tracking checkpoint after successful doc generation.
+# Records HEAD SHA, timestamp, backend used, and which files were documented.
+save_claudux_state() {
+    local head_sha
+    head_sha=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local backend="${CLAUDUX_BACKEND:-claude}"
+
+    # Collect documented files (everything under docs/ tracked by git + untracked new)
+    local files_json="[]"
+    if command -v git >/dev/null 2>&1; then
+        files_json=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
+            printf '"%s",' "$f"
+        done | sed 's/,$//' | sed 's/^/[/' | sed 's/$/]/')
+        [[ "$files_json" == "[]" ]] || true
+    fi
+
+    cat > "$STATE_FILE" <<EOJSON
+{
+  "last_sha": "$head_sha",
+  "last_run": "$timestamp",
+  "backend": "$backend",
+  "files_documented": $files_json
+}
+EOJSON
+    info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
+}
+
+# Load existing state file. Prints JSON to stdout. Returns 1 if no state.
+load_claudux_state() {
+    if [[ -f "$STATE_FILE" ]]; then
+        cat "$STATE_FILE"
+        return 0
+    fi
+    return 1
+}
+
+# Show what changed since last doc generation.
+# Outputs list of files that were modified since the last checkpoint SHA.
+claudux_diff_since_last() {
+    local state
+    if ! state=$(load_claudux_state); then
+        echo "No previous checkpoint — run 'claudux update' first."
+        return 1
+    fi
+
+    local last_sha
+    if command -v jq >/dev/null 2>&1; then
+        last_sha=$(echo "$state" | jq -r '.last_sha')
+    else
+        last_sha=$(echo "$state" | grep '"last_sha"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+    fi
+
+    if [[ -z "$last_sha" ]] || [[ "$last_sha" == "unknown" ]]; then
+        echo "Checkpoint SHA is unknown — cannot diff."
+        return 1
+    fi
+
+    # Check if the SHA still exists in history
+    if ! git cat-file -t "$last_sha" >/dev/null 2>&1; then
+        echo "Checkpoint SHA $last_sha no longer in history (rebase/force-push?). Full rescan needed."
+        return 1
+    fi
+
+    git diff --name-only "$last_sha"..HEAD 2>/dev/null
+}
+
 # Build the comprehensive prompt for Claude
 build_generation_prompt() {
     local project_type="$1"
@@ -528,7 +598,10 @@ update() {
         # Show detailed change summary
         info "📋 Step 4: Analyzing changes made..."
         show_detailed_changes
-        
+
+        # Save change tracking checkpoint
+        save_claudux_state
+
     else
         warn "Claude Code failed with exit code $claude_exit_code"
         echo ""

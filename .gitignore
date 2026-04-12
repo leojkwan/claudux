@@ -35,3 +35,6 @@ documents/.cursorrules
 .cursorrules
 documents/
 .npmrc
+
+# claudux change tracking state (local per-dev)
+.claudux-state.json
