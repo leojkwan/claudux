@@ -15,10 +15,14 @@ save_claudux_state() {
     # Collect documented files (everything under docs/ tracked by git + untracked new)
     local files_json="[]"
     if command -v git >/dev/null 2>&1; then
-        files_json=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
+        local raw_files
+        raw_files=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
             printf '"%s",' "$f"
-        done | sed 's/,$//' | sed 's/^/[/' | sed 's/$/]/')
-        [[ "$files_json" == "[]" ]] || true
+        done | sed 's/,$//')
+        if [[ -n "$raw_files" ]]; then
+            files_json="[$raw_files]"
+        fi
+        # files_json stays "[]" when docs/ has no tracked files
     fi
 
     cat > "$STATE_FILE" <<EOJSON

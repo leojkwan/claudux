@@ -215,7 +215,80 @@ else
 fi
 rm -rf "$TEST_DIR"
 
+# --- Test 12: REGRESSION — save_claudux_state with empty docs/ produces valid JSON ---
+# Bug: when docs/ has no tracked files, files_json pipeline returned empty string
+# instead of "[]", producing invalid JSON like:  "files_documented":
+TEST_DIR_EMPTY=$(mktemp -d /tmp/claudux-state-test-XXXXXX)
+(
+    cd "$TEST_DIR_EMPTY"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "hello" > README.md
+    git add README.md
+    git commit -q -m "init with no docs dir"
+    STATE_FILE="$TEST_DIR_EMPTY/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR_EMPTY/.claudux-state.json"
+    save_claudux_state
+    cat "$STATE_FILE"
+) > /tmp/claudux-state-t12 2>&1
+state12=$(cat /tmp/claudux-state-t12)
+assert_contains "empty docs has files_documented field" "$state12" '"files_documented"'
+assert_contains "empty docs files_documented is []" "$state12" '"files_documented": []'
+rm -rf "$TEST_DIR_EMPTY"
+
+# --- Test 13: REGRESSION — empty docs/ produces valid JSON parseable by jq ---
+TEST_DIR_EMPTY2=$(mktemp -d /tmp/claudux-state-test-XXXXXX)
+if command -v jq >/dev/null 2>&1; then
+    (
+        cd "$TEST_DIR_EMPTY2"
+        git init -q
+        git config user.email "test@test.com"
+        git config user.name "Test"
+        echo "hello" > README.md
+        git add README.md
+        git commit -q -m "init with no docs"
+        STATE_FILE="$TEST_DIR_EMPTY2/.claudux-state.json"
+        source "$LIB_DIR/docs-generation.sh"
+        STATE_FILE="$TEST_DIR_EMPTY2/.claudux-state.json"
+        save_claudux_state
+        if jq . "$STATE_FILE" >/dev/null 2>&1; then
+            echo "valid-json"
+        else
+            echo "invalid-json"
+            echo "--- content ---"
+            cat "$STATE_FILE"
+        fi
+    ) > /tmp/claudux-state-t13 2>&1
+    assert_eq "empty docs state file is valid JSON" "valid-json" "$(head -1 /tmp/claudux-state-t13)"
+else
+    echo "  SKIP empty docs valid JSON test (jq not available)"
+fi
+rm -rf "$TEST_DIR_EMPTY2"
+
+# --- Test 14: docs/ exists but only has untracked files — valid JSON ---
+TEST_DIR_UNTRACKED=$(mktemp -d /tmp/claudux-state-test-XXXXXX)
+(
+    cd "$TEST_DIR_UNTRACKED"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "hello" > README.md
+    mkdir -p docs
+    echo "# Untracked" > docs/untracked.md
+    git add README.md
+    git commit -q -m "init with untracked docs"
+    STATE_FILE="$TEST_DIR_UNTRACKED/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR_UNTRACKED/.claudux-state.json"
+    save_claudux_state
+    cat "$STATE_FILE"
+) > /tmp/claudux-state-t14 2>&1
+assert_contains "untracked docs files_documented is []" "$(cat /tmp/claudux-state-t14)" '"files_documented": []'
+rm -rf "$TEST_DIR_UNTRACKED"
+
 # Cleanup
-rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11}
+rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14}
 
 test_summary
