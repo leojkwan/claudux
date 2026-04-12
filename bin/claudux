@@ -183,7 +183,7 @@ validate_dependencies() {
 main() {
     # Skip dependency validation for version and help commands
     case "${1:-}" in
-        "--version"|"version"|-V|"help"|"-h"|"--help"|"check"|"--check")
+        "--version"|"version"|-V|"help"|"-h"|"--help"|"check"|"--check"|"diff"|"status"|"validate")
             ;;
         *)
             validate_dependencies
@@ -259,6 +259,37 @@ main() {
             check_function "serve"
             show_header
             serve
+            ;;
+        "diff")
+            check_function "show_header"
+            check_function "claudux_diff_since_last"
+            show_header
+            echo "Files changed since last doc generation:"
+            echo ""
+            if changed=$(claudux_diff_since_last); then
+                if [[ -z "$changed" ]]; then
+                    success "No files changed since last checkpoint."
+                else
+                    echo "$changed"
+                    local count
+                    count=$(echo "$changed" | wc -l | tr -d ' ')
+                    echo ""
+                    echo "$count file(s) changed. Run 'claudux update' to regenerate docs."
+                fi
+            fi
+            ;;
+        "status")
+            check_function "show_header"
+            check_function "claudux_status"
+            show_header
+            claudux_status
+            ;;
+        "validate")
+            check_function "show_header"
+            check_function "validate_links"
+            show_header
+            shift
+            validate_links "$@"
             ;;
         "template")
             show_header
