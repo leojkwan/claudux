@@ -203,6 +203,21 @@ validate_dependencies() {
     fi
 }
 
+# Check the active generation backend for commands that invoke the model.
+check_generation_backend() {
+    local backend="${CLAUDUX_BACKEND:-claude}"
+
+    if [[ "$backend" == "codex" ]]; then
+        if declare -F check_codex >/dev/null 2>&1; then
+            check_codex
+        else
+            error_exit "Codex backend requested but check_codex() is unavailable"
+        fi
+    else
+        check_claude
+    fi
+}
+
 # Main function
 main() {
     # Skip dependency validation for version and help commands
@@ -275,19 +290,19 @@ main() {
             ;;
         "update")
             check_function "show_header"
-            check_function "check_claude"
+            check_function "check_generation_backend"
             check_function "update"
             show_header
-            check_claude
+            check_generation_backend
             shift
             update "$@"
             ;;
         "recreate")
             check_function "show_header"
-            check_function "check_claude"
+            check_function "check_generation_backend"
             check_function "recreate_docs"
             show_header
-            check_claude
+            check_generation_backend
             shift
             recreate_docs "$@"
             ;;
@@ -359,10 +374,10 @@ main() {
         "")
             # Default action: show interactive menu
             check_function "show_header"
-            check_function "check_claude"
+            check_function "check_generation_backend"
             check_function "show_menu"
             show_header
-            check_claude
+            check_generation_backend
             show_menu
             ;;
         *)

@@ -70,6 +70,7 @@ run_codex_exec() {
 format_codex_output_stream() {
     local cmd_count=0
     local msg_count=0
+    local file_count=0
     local line
 
     while IFS= read -r line; do
@@ -89,48 +90,46 @@ format_codex_output_stream() {
                 [[ -n "$thread_id" ]] && printf "\r\033[KCodex session: %s\n" "${thread_id:0:12}..."
                 ;;
             "item.started")
-                # command_execution about to run — show the command
-                local item_type
-                item_type=$(echo "$line" | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"command_execution".*/command_execution/p')
-                if [[ "$item_type" == "command_execution" ]]; then
+                # Detect nested item type: command_execution or file_change
+                if echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"command_execution"'; then
                     local cmd
                     cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
                     if [[ -n "$cmd" ]]; then
                         ((cmd_count++))
                         printf "\r\033[KRunning [%d]: %s\n" "$cmd_count" "${cmd:0:100}"
                     fi
+                elif echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"file_change"'; then
+                    # Count files being changed and show paths
+                    local paths
+                    paths=$(echo "$line" | grep -o '"path"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/g')
+                    local count=0
+                    while IFS= read -r p; do
+                        [[ -z "$p" ]] && continue
+                        ((file_count++))
+                        ((count++))
+                        printf "\r\033[KWriting [%d]: %s\n" "$file_count" "$(basename "$p")"
+                    done <<< "$paths"
                 fi
                 ;;
             "item.completed")
-                # Two sub-types: agent_message (text) and command_execution (tool result)
-                local item_type
-                item_type=""
+                # Sub-types: agent_message, command_execution, file_change
                 if echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"agent_message"'; then
-                    item_type="agent_message"
+                    ((msg_count++))
+                    local text
+                    text=$(echo "$line" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                    if [[ -n "$text" ]]; then
+                        printf "\r\033[KAgent: %s\n" "${text:0:120}"
+                    fi
                 elif echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"command_execution"'; then
-                    item_type="command_execution"
+                    local exit_code
+                    exit_code=$(echo "$line" | sed -n 's/.*"exit_code"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+                    local cmd
+                    cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                    if [[ -n "$exit_code" ]] && [[ "$exit_code" -ne 0 ]]; then
+                        printf "\r\033[KCommand failed (exit %s): %s\n" "$exit_code" "${cmd:0:80}"
+                    fi
                 fi
-
-                case "$item_type" in
-                    "agent_message")
-                        ((msg_count++))
-                        # Extract first 120 chars of text for progress display
-                        local text
-                        text=$(echo "$line" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        if [[ -n "$text" ]]; then
-                            printf "\r\033[KAgent: %s\n" "${text:0:120}"
-                        fi
-                        ;;
-                    "command_execution")
-                        local exit_code
-                        exit_code=$(echo "$line" | sed -n 's/.*"exit_code"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-                        local cmd
-                        cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        if [[ -n "$exit_code" ]] && [[ "$exit_code" -ne 0 ]]; then
-                            printf "\r\033[KCommand failed (exit %s): %s\n" "$exit_code" "${cmd:0:80}"
-                        fi
-                        ;;
-                esac
+                # file_change completed events are already counted in item.started
                 ;;
             "turn.completed")
                 local input_tokens output_tokens
@@ -145,8 +144,8 @@ format_codex_output_stream() {
     done
 
     printf "\r\033[K"
-    if [[ $cmd_count -gt 0 ]] || [[ $msg_count -gt 0 ]]; then
+    if [[ $cmd_count -gt 0 ]] || [[ $msg_count -gt 0 ]] || [[ $file_count -gt 0 ]]; then
         echo ""
-        success "Codex finished ($cmd_count commands, $msg_count messages)"
+        success "Codex finished ($cmd_count commands, $file_count files, $msg_count messages)"
     fi
 }

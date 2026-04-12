@@ -154,7 +154,7 @@ result22=$(cat /tmp/claudux-harden-t22)
 assert_contains "multi-line session shows session id" "$result22" "Codex session:"
 assert_contains "multi-line session shows command" "$result22" "Running [1]:"
 assert_contains "multi-line session shows messages" "$result22" "Agent: Analyzing codebase"
-assert_contains "multi-line session shows summary" "$result22" "Codex finished (1 commands, 2 messages)"
+assert_contains "multi-line session shows summary" "$result22" "Codex finished (1 commands, 0 files, 2 messages)"
 
 # --- Test 23: formatter handles failed command_execution ---
 (
