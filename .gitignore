@@ -35,3 +35,10 @@ documents/.cursorrules
 .cursorrules
 documents/
 .npmrc
+
+# Secrets / environment
+.env
+.env.*
+*.key
+*.pem
+secrets/
