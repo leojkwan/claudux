@@ -52,18 +52,11 @@ flowchart LR
 
 Everything runs locally — your code never leaves your machine.
 
-## Example Output
+## Demo
 
-```
-$ claudux update
-Starting documentation update...
-Model: Claude Sonnet (fast & capable)
-Building prompt for javascript project...
-Created docs/guide/index.md
-Created docs/api/index.md
-Validating documentation links... 12/12 valid
-Documentation generation complete!
-```
+<p align="center">
+  <img src="./assets/terminal-demo.svg" alt="claudux update terminal session" width="100%" />
+</p>
 
 ## Commands
 
