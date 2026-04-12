@@ -53,6 +53,12 @@ claudux update
 claudux serve  # http://localhost:5173
 ```
 
+## See It In Action
+
+<p align="center">
+  <img src="/assets/terminal-demo.svg" alt="claudux update terminal session" style="width: 100%; max-width: 800px;" />
+</p>
+
 ## The Problem Every Developer Knows
 
 **Documentation debt is killing your productivity.** You ship features, but docs lag behind. New team members struggle to onboard. You spend weekends writing docs instead of building.

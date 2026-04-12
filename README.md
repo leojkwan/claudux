@@ -36,18 +36,11 @@ claudux serve    # Preview at localhost:5173
 
 The generated docs include navigation, search, mobile support, and stay current with your codebase.
 
-## Example output
+## Demo
 
-```bash
-$ claudux update
-📊 Starting documentation update...
-🧠 Model: Claude Sonnet (fast & capable)
-📝 Building prompt for javascript project...
-✅ Created docs/guide/index.md
-✅ Created docs/api/index.md
-🔍 Validating documentation links... ✅ 12/12 valid
-📋 Documentation generation complete!
-```
+<p align="center">
+  <img src="./assets/terminal-demo.svg" alt="claudux update terminal session" width="100%" />
+</p>
 
 ## Commands
 
