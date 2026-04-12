@@ -33,3 +33,13 @@ Pull requests:
 - Keep diffs focused; small and frequent PRs are easier to review
 
 By contributing, you agree to the MIT license.
+
+## Publishing to npm (maintainers only)
+
+```bash
+npm login
+npm version patch   # or: minor | major
+npm publish --access public
+```
+
+Package name: `claudux`. Requires Node 18+.

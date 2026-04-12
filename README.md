@@ -60,6 +60,22 @@ claudux recreate        # Delete docs and start over
 claudux --help          # Full options
 ```
 
+## How Claudux Compares
+
+| | Claudux | TypeDoc / JSDoc | Docusaurus | Manual docs |
+|---|---|---|---|---|
+| **Input** | Your actual codebase | Type annotations only | Manually written MDX | Manually written |
+| **Output** | Full VitePress site | API reference only | Whatever you write | Whatever you write |
+| **Maintenance** | Re-run `claudux update` | Rebuild on change | Edit by hand | Edit by hand |
+| **AI-aware** | Yes — reads code structure and patterns | No | No | No |
+| **Link validation** | Built-in with auto-fix | No | Build-time only | No |
+
+Claudux doesn't replace API reference generators — it generates the docs you never write: guides, architecture overviews, getting started pages. Run it alongside TypeDoc, not instead of it.
+
+## Sibling Project
+
+**[vidux](https://github.com/leojkwan/vidux)** — plan-first orchestration for AI coding agents. If claudux is "docs before code," vidux is "plan before code." Same philosophy, different surface.
+
 ## Configuration
 
 Optional `claudux.json` in project root:
