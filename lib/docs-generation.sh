@@ -369,7 +369,27 @@ update() {
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
     local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
-    
+
+    # Incremental mode: if a checkpoint exists, scope the update to changed files
+    if [[ -f "$STATE_FILE" ]]; then
+        local changed_files
+        changed_files=$(claudux_diff_since_last 2>/dev/null) || changed_files=""
+        if [[ -n "$changed_files" ]]; then
+            local count
+            count=$(echo "$changed_files" | wc -l | tr -d ' ')
+            info "Incremental mode: $count file(s) changed since last run"
+            local file_list
+            file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
+            prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.
+
+Changed files: $file_list
+
+$prompt"
+        else
+            info "No source changes since last run — running full scan"
+        fi
+    fi
+
     # Check if prompt was built successfully
     if [[ -z "$prompt" ]]; then
         warn "❌ Failed to build generation prompt"
