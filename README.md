@@ -27,26 +27,37 @@ claudux          # Analyze code → generate docs
 claudux serve    # Preview at localhost:5173
 ```
 
-## What it does
+## How It Works
 
-- Scans your source code to understand structure and patterns
-- Generates a complete VitePress documentation site
-- Validates internal links to prevent 404s
-- Runs locally (code doesn't leave your machine)
+Claudux uses a two-phase flow powered by Claude AI:
 
-The generated docs include navigation, search, mobile support, and stay current with your codebase.
+```mermaid
+flowchart LR
+    CODE[Your Codebase] -->|analyze| PLAN[Phase 1: Plan]
+    PLAN -->|outline + config| WRITE[Phase 2: Write]
+    WRITE -->|generate pages| DOCS[VitePress Site]
+    DOCS -->|validate links| CHECK{Links OK?}
+    CHECK -->|yes| DONE[Done]
+    CHECK -->|broken| WRITE
+```
 
-## Example output
+**Phase 1 — Plan:** Scans your source code, detects project type, reads any existing docs or config files (`CLAUDE.md`, `claudux.json`, `.ai-docs-style.md`), and builds a documentation outline with VitePress navigation.
 
-```bash
+**Phase 2 — Write:** Generates markdown pages with correct cross-references, breadcrumbs, and code examples pulled from your actual codebase. Validates all internal links and auto-fixes broken ones.
+
+Everything runs locally — your code never leaves your machine.
+
+## Example Output
+
+```
 $ claudux update
-📊 Starting documentation update...
-🧠 Model: Claude Sonnet (fast & capable)
-📝 Building prompt for javascript project...
-✅ Created docs/guide/index.md
-✅ Created docs/api/index.md
-🔍 Validating documentation links... ✅ 12/12 valid
-📋 Documentation generation complete!
+Starting documentation update...
+Model: Claude Sonnet (fast & capable)
+Building prompt for javascript project...
+Created docs/guide/index.md
+Created docs/api/index.md
+Validating documentation links... 12/12 valid
+Documentation generation complete!
 ```
 
 ## Commands
