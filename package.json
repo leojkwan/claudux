@@ -7,7 +7,8 @@
     "claudux": "./bin/claudux"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "bash -n bin/claudux && for f in lib/*.sh; do bash -n \"$f\"; done && echo 'All syntax checks passed'",
+    "lint": "shellcheck -s bash -S warning bin/claudux lib/*.sh"
   },
   "keywords": [
     "documentation",
