@@ -100,6 +100,17 @@ for lib in "${REQUIRED_LIBS[@]}"; do
     fi
 done
 
+# Source Codex backend adapter when CLAUDUX_BACKEND=codex
+if [[ "${CLAUDUX_BACKEND:-}" == "codex" ]]; then
+    codex_lib="$LIB_DIR/codex-utils.sh"
+    if [[ -f "$codex_lib" ]]; then
+        source "$codex_lib"
+    else
+        echo "ERROR: Codex backend requested but $codex_lib not found" >&2
+        exit 1
+    fi
+fi
+
 # Helper function to check if a function exists
 check_function() {
     local func_name="$1"

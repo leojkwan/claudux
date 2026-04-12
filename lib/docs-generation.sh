@@ -399,9 +399,48 @@ update() {
         return $ec
     }
 
-    # Launch generation once
+    # Function: run Codex once and stream output; return exit code
+    run_codex_once() {
+        local started=false
+        : > "$claude_log"
+
+        IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
+        info "Model: $codex_model_name"
+
+        ( run_codex_exec "$prompt" 2>&1 | tee "$claude_log" ) | format_codex_output_stream &
+        local stream_pid=$!
+
+        for _ in $(seq 1 30); do
+            if [[ -s "$claude_log" ]]; then
+                started=true
+                break
+            fi
+            sleep 1
+        done
+
+        if ! $started; then
+            warn "No visible progress after 30s"
+            kill "$stream_pid" 2>/dev/null || true
+            wait "$stream_pid" 2>/dev/null || true
+            return 124
+        fi
+
+        trap 'echo ""; warn "Interrupt received, stopping generation..."; kill -TERM ${stream_pid} 2>/dev/null || true; [[ -n "$progress_pid" ]] && kill $progress_pid 2>/dev/null || true; wait ${stream_pid} 2>/dev/null || true; exit 130' INT
+        wait ${stream_pid}
+        local ec=$?
+        trap - INT
+        return $ec
+    }
+
+    # Launch generation — route based on CLAUDUX_BACKEND
+    local backend="${CLAUDUX_BACKEND:-claude}"
     claude_exit_code=1
-    run_claude_once
+    if [[ "$backend" == "codex" ]]; then
+        info "Backend: Codex"
+        run_codex_once
+    else
+        run_claude_once
+    fi
     claude_exit_code=$?
     
     echo ""
