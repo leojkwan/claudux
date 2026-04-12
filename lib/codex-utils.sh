@@ -38,11 +38,13 @@ get_codex_model_settings() {
 
 # Run Codex non-interactively with a prompt
 # Usage: run_codex_exec "prompt text" [output_file]
+# Stdout: JSONL events only.  Stderr: sent to CODEX_STDERR_LOG (default /tmp/claudux-codex-stderr.log).
 run_codex_exec() {
     local prompt="$1"
     local output_file="${2:-}"
     local model="${CODEX_MODEL:-gpt-5.4}"
     local effort="${CODEX_REASONING_EFFORT:-xhigh}"
+    local stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
 
     local codex_args=(
         exec
@@ -57,83 +59,94 @@ run_codex_exec() {
         codex_args+=(-o "$output_file")
     fi
 
-    # Pass prompt via stdin to avoid shell escaping issues
-    echo "$prompt" | codex "${codex_args[@]}"
+    # Pass prompt via stdin; redirect stderr to log to keep stdout as clean JSONL
+    echo "$prompt" | codex "${codex_args[@]}" 2>>"$stderr_log"
 }
 
-# Parse Codex JSONL output and render progress
-# Mirrors format_claude_output_stream() but for Codex event format
+# Parse Codex JSONL output and render progress.
+# Codex CLI v0.119+ emits: thread.started, turn.started, item.started,
+# item.completed (with nested item.type: agent_message | command_execution),
+# turn.completed.  This is completely different from Claude's stream-json.
 format_codex_output_stream() {
-    local file_count=0
-    local reads=0
-    local creates=0
-    local updates=0
-    local deletes=0
+    local cmd_count=0
+    local msg_count=0
     local line
 
     while IFS= read -r line; do
-        # Skip empty lines
+        # Skip empty lines and non-JSON (stderr bleed-through)
         [[ -z "$line" ]] && continue
+        [[ "$line" != "{"* ]] && continue
 
-        # Parse event type from JSONL
+        # Top-level event type — must match the FIRST "type" field, not a nested one.
+        # Anchor after the opening brace to avoid greedy .* skipping to nested types.
         local event_type
-        event_type=$(echo "$line" | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        event_type=$(echo "$line" | sed -n 's/^{"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
         case "$event_type" in
-            "agent_start"|"session_start")
-                local init_model
-                init_model=$(echo "$line" | sed -n 's/.*"model"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                if [[ -n "$init_model" ]]; then
-                    print_color "BLUE" "   Session started - Model: $init_model"
+            "thread.started")
+                local thread_id
+                thread_id=$(echo "$line" | sed -n 's/.*"thread_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                [[ -n "$thread_id" ]] && printf "\r\033[KCodex session: %s\n" "${thread_id:0:12}..."
+                ;;
+            "item.started")
+                # command_execution about to run — show the command
+                local item_type
+                item_type=$(echo "$line" | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"command_execution".*/command_execution/p')
+                if [[ "$item_type" == "command_execution" ]]; then
+                    local cmd
+                    cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                    if [[ -n "$cmd" ]]; then
+                        ((cmd_count++))
+                        printf "\r\033[KRunning [%d]: %s\n" "$cmd_count" "${cmd:0:100}"
+                    fi
                 fi
                 ;;
-            "tool_use"|"tool_call")
-                local tool_name
-                tool_name=$(echo "$line" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                case "$tool_name" in
-                    "read"|"Read")
-                        ((reads++))
-                        local file_path
-                        file_path=$(echo "$line" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        [[ -n "$file_path" ]] && printf "\r\033[KAnalyzing: %s\n" "$file_path"
+            "item.completed")
+                # Two sub-types: agent_message (text) and command_execution (tool result)
+                local item_type
+                item_type=""
+                if echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"agent_message"'; then
+                    item_type="agent_message"
+                elif echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"command_execution"'; then
+                    item_type="command_execution"
+                fi
+
+                case "$item_type" in
+                    "agent_message")
+                        ((msg_count++))
+                        # Extract first 120 chars of text for progress display
+                        local text
+                        text=$(echo "$line" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                        if [[ -n "$text" ]]; then
+                            printf "\r\033[KAgent: %s\n" "${text:0:120}"
+                        fi
                         ;;
-                    "write"|"Write"|"create"|"Create")
-                        ((creates++))
-                        ((file_count++))
-                        local file_path
-                        file_path=$(echo "$line" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        [[ -n "$file_path" ]] && printf "\r\033[KCreated [%d]: %s\n" "$file_count" "$file_path"
-                        ;;
-                    "edit"|"Edit")
-                        ((updates++))
-                        ((file_count++))
-                        local file_path
-                        file_path=$(echo "$line" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        [[ -n "$file_path" ]] && printf "\r\033[KUpdated [%d]: %s\n" "$file_count" "$file_path"
-                        ;;
-                    "delete"|"Delete")
-                        ((deletes++))
-                        ((file_count++))
-                        local file_path
-                        file_path=$(echo "$line" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                        [[ -n "$file_path" ]] && printf "\r\033[KRemoved [%d]: %s\n" "$file_count" "$file_path"
+                    "command_execution")
+                        local exit_code
+                        exit_code=$(echo "$line" | sed -n 's/.*"exit_code"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+                        local cmd
+                        cmd=$(echo "$line" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                        if [[ -n "$exit_code" ]] && [[ "$exit_code" -ne 0 ]]; then
+                            printf "\r\033[KCommand failed (exit %s): %s\n" "$exit_code" "${cmd:0:80}"
+                        fi
                         ;;
                 esac
                 ;;
-            "error")
-                local error_msg
-                error_msg=$(echo "$line" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-                print_color "RED" "Error: $error_msg"
-                ;;
-            "agent_end"|"session_end")
+            "turn.completed")
+                local input_tokens output_tokens
+                input_tokens=$(echo "$line" | sed -n 's/.*"input_tokens"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+                output_tokens=$(echo "$line" | sed -n 's/.*"output_tokens"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
                 printf "\r\033[K"
+                if [[ -n "$input_tokens" ]] && [[ -n "$output_tokens" ]]; then
+                    printf "Turn complete — tokens: %s in / %s out\n" "$input_tokens" "$output_tokens"
+                fi
                 ;;
         esac
     done
 
     printf "\r\033[K"
-    if [[ $file_count -gt 0 ]]; then
+    if [[ $cmd_count -gt 0 ]] || [[ $msg_count -gt 0 ]]; then
         echo ""
-        success "Processed $file_count files (reads: $reads, creates: $creates, updates: $updates, deletes: $deletes)"
+        success "Codex finished ($cmd_count commands, $msg_count messages)"
     fi
 }

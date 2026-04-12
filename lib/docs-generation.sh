@@ -501,7 +501,7 @@ $prompt"
         IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
         info "Model: $codex_model_name"
 
-        ( run_codex_exec "$prompt" 2>&1 | tee "$claude_log" ) | format_codex_output_stream &
+        ( run_codex_exec "$prompt" | tee "$claude_log" ) | format_codex_output_stream &
         local stream_pid=$!
 
         for _ in $(seq 1 30); do

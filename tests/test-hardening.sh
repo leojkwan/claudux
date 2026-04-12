@@ -107,6 +107,75 @@ assert_contains "empty input to formatter exits ok" "$(cat /tmp/claudux-harden-t
 ) > /tmp/claudux-harden-t8 2>&1
 assert_contains "non-JSON input to formatter exits ok" "$(cat /tmp/claudux-harden-t8)" "exit-ok"
 
+# --- Test 18: formatter parses real Codex thread.started event ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    echo '{"type":"thread.started","thread_id":"019d83be-c3a8-7b50-bec6-e0d2c0e9772e"}' | format_codex_output_stream
+) > /tmp/claudux-harden-t18 2>&1
+assert_contains "thread.started shows session id" "$(cat /tmp/claudux-harden-t18)" "Codex session:"
+
+# --- Test 19: formatter parses item.started command_execution ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    echo '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc '\''wc -l bin/claudux'\''","status":"in_progress"}}' | format_codex_output_stream
+) > /tmp/claudux-harden-t19 2>&1
+assert_contains "item.started shows running command" "$(cat /tmp/claudux-harden-t19)" "Running [1]:"
+
+# --- Test 20: formatter parses item.completed agent_message ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"CODEX_PING_OK"}}' | format_codex_output_stream
+) > /tmp/claudux-harden-t20 2>&1
+assert_contains "agent_message shows text" "$(cat /tmp/claudux-harden-t20)" "Agent: CODEX_PING_OK"
+
+# --- Test 21: formatter parses turn.completed with token usage ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    echo '{"type":"turn.completed","usage":{"input_tokens":28311,"cached_input_tokens":2432,"output_tokens":9}}' | format_codex_output_stream
+) > /tmp/claudux-harden-t21 2>&1
+assert_contains "turn.completed shows token counts" "$(cat /tmp/claudux-harden-t21)" "tokens: 28311 in / 9 out"
+
+# --- Test 22: formatter handles multi-line Codex session ---
+(
+    # Override success stub so formatter summary is visible
+    success() { echo "$@"; }
+    source "$LIB_DIR/codex-utils.sh"
+    {
+        echo '{"type":"thread.started","thread_id":"test-thread-123"}'
+        echo '{"type":"turn.started"}'
+        echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Analyzing codebase"}}'
+        echo '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls -la docs/","status":"in_progress"}}'
+        echo '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls -la docs/","aggregated_output":"total 8\n","exit_code":0,"status":"completed"}}'
+        echo '{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Found 3 doc files"}}'
+        echo '{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":500,"output_tokens":50}}'
+    } | format_codex_output_stream
+) > /tmp/claudux-harden-t22 2>&1
+result22=$(cat /tmp/claudux-harden-t22)
+assert_contains "multi-line session shows session id" "$result22" "Codex session:"
+assert_contains "multi-line session shows command" "$result22" "Running [1]:"
+assert_contains "multi-line session shows messages" "$result22" "Agent: Analyzing codebase"
+assert_contains "multi-line session shows summary" "$result22" "Codex finished (1 commands, 2 messages)"
+
+# --- Test 23: formatter handles failed command_execution ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    echo '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"cat nonexistent.md","aggregated_output":"","exit_code":1,"status":"completed"}}' | format_codex_output_stream
+) > /tmp/claudux-harden-t23 2>&1
+assert_contains "failed command shows error" "$(cat /tmp/claudux-harden-t23)" "Command failed (exit 1)"
+
+# --- Test 24: formatter ignores stderr noise mixed in ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    {
+        echo 'Reading prompt from stdin...'
+        echo '2026-04-12T22:10:10.149441Z ERROR codex_core::codex: failed to load skill'
+        echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Hello"}}'
+    } | format_codex_output_stream
+) > /tmp/claudux-harden-t24 2>&1
+result24=$(cat /tmp/claudux-harden-t24)
+assert_contains "stderr noise ignored, message parsed" "$result24" "Agent: Hello"
+assert_not_contains "stderr noise not shown" "$result24" "ERROR"
+
 # ═══════════════════════════════════════════
 # save/load state robustness
 # ═══════════════════════════════════════════
@@ -246,6 +315,6 @@ assert_eq "file paths with spaces produce valid JSON" "valid-json" "$(cat /tmp/c
 rm -rf "$TEST_DIR"
 
 # Cleanup
-rm -f /tmp/claudux-harden-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,17}
+rm -f /tmp/claudux-harden-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24}
 
 test_summary
