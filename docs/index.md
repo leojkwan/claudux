@@ -78,6 +78,9 @@ Claudux uses a **two-phase flow** to produce reliable docs:
 | `claudux update` | Generate/update docs (includes cleanup and validation) |
 | `claudux update -m "..."` | Update with a focused directive |
 | `claudux serve` | Start dev server at localhost:5173 |
+| `claudux diff` | Files changed since last doc generation |
+| `claudux status` | Documentation freshness and last run details |
+| `claudux validate` | Check all internal links without regenerating |
 | `claudux recreate` | Start fresh (delete all docs) |
 | `claudux check` | Environment diagnostics |
 | `claudux template` | Generate claudux.md (docs preferences) |
