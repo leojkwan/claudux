@@ -314,7 +314,211 @@ TEST_DIR=$(setup_repo)
 assert_eq "file paths with spaces produce valid JSON" "valid-json" "$(cat /tmp/claudux-harden-t17)"
 rm -rf "$TEST_DIR"
 
+# ═══════════════════════════════════════════
+# Auth error detection in check_codex()
+# ═══════════════════════════════════════════
+
+# --- Test 25: check_codex detects auth error keywords ---
+# We can't run the real codex CLI in tests, but we can verify the grep pattern
+# matches the keywords check_codex looks for.
+(
+    auth_keywords=("auth" "api.key" "unauthorized" "401" "login" "token")
+    pattern='auth|api.key|unauthorized|401|login|token'
+    all_match=true
+    for kw in "${auth_keywords[@]}"; do
+        if ! echo "Error: $kw required" | grep -qiE "$pattern"; then
+            all_match=false
+            break
+        fi
+    done
+    if $all_match; then echo "all-match"; else echo "mismatch"; fi
+) > /tmp/claudux-harden-t25 2>&1
+assert_eq "auth error keywords all match grep pattern" "all-match" "$(cat /tmp/claudux-harden-t25)"
+
+# --- Test 26: check_codex auth probe pattern does NOT match non-auth errors ---
+(
+    pattern='auth|api.key|unauthorized|401|login|token'
+    false_positives=0
+    for msg in "rate limit exceeded" "network timeout" "model not found" "internal server error"; do
+        if echo "$msg" | grep -qiE "$pattern"; then
+            ((false_positives++))
+        fi
+    done
+    echo "$false_positives"
+) > /tmp/claudux-harden-t26 2>&1
+assert_eq "non-auth errors do not match auth pattern" "0" "$(cat /tmp/claudux-harden-t26)"
+
+# --- Test 27: check_codex function signature includes auth probe ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f check_codex)
+    if echo "$fn_body" | grep -q 'codex exec.*echo hello'; then
+        echo "has-probe"
+    else
+        echo "no-probe"
+    fi
+) > /tmp/claudux-harden-t27 2>&1
+assert_eq "check_codex has auth probe" "has-probe" "$(cat /tmp/claudux-harden-t27)"
+
+# --- Test 28: check_codex error message mentions 'codex auth' ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f check_codex)
+    if echo "$fn_body" | grep -q "codex auth"; then
+        echo "has-remedy"
+    else
+        echo "no-remedy"
+    fi
+) > /tmp/claudux-harden-t28 2>&1
+assert_eq "check_codex error message mentions remedy" "has-remedy" "$(cat /tmp/claudux-harden-t28)"
+
+# ═══════════════════════════════════════════
+# Timeout handling in run_codex_exec()
+# ═══════════════════════════════════════════
+
+# --- Test 29: run_codex_exec function reads CLAUDUX_TIMEOUT ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    if echo "$fn_body" | grep -q 'CLAUDUX_TIMEOUT'; then
+        echo "reads-timeout"
+    else
+        echo "no-timeout"
+    fi
+) > /tmp/claudux-harden-t29 2>&1
+assert_eq "run_codex_exec reads CLAUDUX_TIMEOUT" "reads-timeout" "$(cat /tmp/claudux-harden-t29)"
+
+# --- Test 30: run_codex_exec defaults to 600s timeout ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    if echo "$fn_body" | grep -q 'CLAUDUX_TIMEOUT:-600'; then
+        echo "default-600"
+    else
+        echo "no-default"
+    fi
+) > /tmp/claudux-harden-t30 2>&1
+assert_eq "run_codex_exec defaults timeout to 600s" "default-600" "$(cat /tmp/claudux-harden-t30)"
+
+# --- Test 31: run_codex_exec handles exit code 124 (timeout) ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    if echo "$fn_body" | grep -q 'rc -eq 124'; then
+        echo "handles-124"
+    else
+        echo "no-124"
+    fi
+) > /tmp/claudux-harden-t31 2>&1
+assert_eq "run_codex_exec detects timeout exit code 124" "handles-124" "$(cat /tmp/claudux-harden-t31)"
+
+# --- Test 32: run_codex_exec tries gtimeout on macOS ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    if echo "$fn_body" | grep -q 'gtimeout'; then
+        echo "has-gtimeout"
+    else
+        echo "no-gtimeout"
+    fi
+) > /tmp/claudux-harden-t32 2>&1
+assert_eq "run_codex_exec has gtimeout fallback for macOS" "has-gtimeout" "$(cat /tmp/claudux-harden-t32)"
+
+# --- Test 33: run_codex_exec has no-timeout fallback when CLAUDUX_TIMEOUT=0 ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    # The else branch runs codex without timeout wrapper
+    if echo "$fn_body" | grep -q 'echo.*\| codex'; then
+        echo "has-fallback"
+    else
+        echo "no-fallback"
+    fi
+) > /tmp/claudux-harden-t33 2>&1
+assert_eq "run_codex_exec has no-timeout fallback" "has-fallback" "$(cat /tmp/claudux-harden-t33)"
+
+# --- Test 34: run_codex_exec timeout error message includes duration ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    if echo "$fn_body" | grep -q 'timed out after'; then
+        echo "has-duration"
+    else
+        echo "no-duration"
+    fi
+) > /tmp/claudux-harden-t34 2>&1
+assert_eq "timeout error message includes duration" "has-duration" "$(cat /tmp/claudux-harden-t34)"
+
+# ═══════════════════════════════════════════
+# Integration: diff/status after backend switch
+# ═══════════════════════════════════════════
+
+# --- Test 35: state file preserves backend across save/load cycle ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    export CLAUDUX_BACKEND=codex
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+    loaded=$(load_claudux_state)
+    if command -v jq >/dev/null 2>&1; then
+        echo "$loaded" | jq -r '.backend'
+    else
+        echo "$loaded" | grep '"backend"' | sed 's/.*: *"\([^"]*\)".*/\1/'
+    fi
+) > /tmp/claudux-harden-t35 2>&1
+assert_eq "state preserves codex backend after load" "codex" "$(cat /tmp/claudux-harden-t35)"
+rm -rf "$TEST_DIR"
+
+# --- Test 36: claudux_diff_since_last works after codex-backend save ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    export CLAUDUX_BACKEND=codex
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+
+    # Make a change after checkpoint
+    echo "new content" >> README.md
+    git add README.md
+    git commit -q -m "post-codex change"
+
+    changed=$(claudux_diff_since_last 2>/dev/null)
+    if echo "$changed" | grep -q "README.md"; then
+        echo "diff-works"
+    else
+        echo "diff-broken"
+    fi
+) > /tmp/claudux-harden-t36 2>&1
+assert_eq "diff works after codex-backend save" "diff-works" "$(cat /tmp/claudux-harden-t36)"
+rm -rf "$TEST_DIR"
+
+# --- Test 37: CLAUDUX_TIMEOUT=0 disables timeout (function still has the path) ---
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f run_codex_exec)
+    # When timeout_secs is 0 or non-numeric, the -gt 0 check fails and we hit the else
+    if echo "$fn_body" | grep -qE 'timeout_secs.*-gt 0'; then
+        echo "guards-zero"
+    else
+        echo "no-guard"
+    fi
+) > /tmp/claudux-harden-t37 2>&1
+assert_eq "CLAUDUX_TIMEOUT=0 guard exists" "guards-zero" "$(cat /tmp/claudux-harden-t37)"
+
+# --- Test 38: codex-utils.sh sources cleanly under set -u ---
+(
+    set -u
+    source "$LIB_DIR/codex-utils.sh" 2>&1
+    echo "sourced-ok"
+) > /tmp/claudux-harden-t38 2>&1
+assert_eq "codex-utils.sh sources cleanly under set -u" "sourced-ok" "$(tail -1 /tmp/claudux-harden-t38)"
+
 # Cleanup
-rm -f /tmp/claudux-harden-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24}
+rm -f /tmp/claudux-harden-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38}
 
 test_summary

@@ -1,13 +1,29 @@
 #!/bin/bash
 # Codex CLI utilities — mirrors claude-utils.sh for the Codex backend
 
-# Check if Codex CLI is installed
+# Check if Codex CLI is installed and authenticated
 check_codex() {
     if ! command -v codex &> /dev/null; then
         error_exit "Codex CLI not found. Install: npm install -g @openai/codex"
     fi
 
     success "Codex CLI found: $(codex --version)"
+
+    # Probe authentication: run a trivial exec and look for auth errors.
+    # Codex CLI prints auth errors to stderr and exits non-zero.
+    local probe_out probe_rc
+    probe_out=$(codex exec -m "${CODEX_MODEL:-gpt-5.4}" --json 'echo hello' 2>&1) || probe_rc=$?
+    probe_rc=${probe_rc:-0}
+
+    if [[ $probe_rc -ne 0 ]]; then
+        # Detect common auth failure patterns
+        if echo "$probe_out" | grep -qiE 'auth|api.key|unauthorized|401|login|token'; then
+            error_exit "Codex CLI is not authenticated. Run 'codex auth' to log in, or set OPENAI_API_KEY."
+        fi
+        # Non-auth failure (e.g. rate limit, network) — warn but don't block
+        warn "Codex CLI probe returned exit code $probe_rc (may be transient)"
+    fi
+
     info "Using Codex backend (CLAUDUX_BACKEND=codex)"
 }
 
@@ -39,12 +55,14 @@ get_codex_model_settings() {
 # Run Codex non-interactively with a prompt
 # Usage: run_codex_exec "prompt text" [output_file]
 # Stdout: JSONL events only.  Stderr: sent to CODEX_STDERR_LOG (default /tmp/claudux-codex-stderr.log).
+# Respects CLAUDUX_TIMEOUT (seconds). Default: 600 (10 min). Set 0 to disable.
 run_codex_exec() {
     local prompt="$1"
     local output_file="${2:-}"
     local model="${CODEX_MODEL:-gpt-5.4}"
     local effort="${CODEX_REASONING_EFFORT:-xhigh}"
     local stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
+    local timeout_secs="${CLAUDUX_TIMEOUT:-600}"
 
     local codex_args=(
         exec
@@ -60,7 +78,20 @@ run_codex_exec() {
     fi
 
     # Pass prompt via stdin; redirect stderr to log to keep stdout as clean JSONL
-    echo "$prompt" | codex "${codex_args[@]}" 2>>"$stderr_log"
+    if [[ "$timeout_secs" -gt 0 ]] 2>/dev/null && command -v timeout >/dev/null 2>&1; then
+        echo "$prompt" | timeout "$timeout_secs" codex "${codex_args[@]}" 2>>"$stderr_log"
+    elif [[ "$timeout_secs" -gt 0 ]] 2>/dev/null && command -v gtimeout >/dev/null 2>&1; then
+        # macOS with coreutils installed via brew
+        echo "$prompt" | gtimeout "$timeout_secs" codex "${codex_args[@]}" 2>>"$stderr_log"
+    else
+        echo "$prompt" | codex "${codex_args[@]}" 2>>"$stderr_log"
+    fi
+    local rc=$?
+    # Exit code 124 from timeout/gtimeout means the command timed out
+    if [[ $rc -eq 124 ]]; then
+        echo '{"type":"error","message":"Codex execution timed out after '"$timeout_secs"'s"}' >&2
+    fi
+    return $rc
 }
 
 # Parse Codex JSONL output and render progress.
