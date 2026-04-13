@@ -17,7 +17,10 @@ save_claudux_state() {
     if command -v git >/dev/null 2>&1; then
         local raw_files
         raw_files=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
-            printf '"%s",' "$f"
+            # Escape backslashes and double-quotes for valid JSON strings
+            local escaped
+            escaped=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            printf '"%s",' "$escaped"
         done | sed 's/,$//')
         if [[ -n "$raw_files" ]]; then
             files_json="[$raw_files]"
