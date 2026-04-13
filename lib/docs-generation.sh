@@ -39,21 +39,34 @@ EOJSON
     info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
 }
 
-# Load existing state file. Prints JSON to stdout. Returns 1 if no state.
+# Load existing state file. Prints JSON to stdout.
+# Returns 0 on success, 1 if no state file exists, 2 if state is corrupt.
 load_claudux_state() {
-    if [[ -f "$STATE_FILE" ]]; then
-        cat "$STATE_FILE"
-        return 0
+    if [[ ! -f "$STATE_FILE" ]]; then
+        return 1
     fi
-    return 1
+    # Validate JSON if jq is available; otherwise trust the file
+    if command -v jq >/dev/null 2>&1; then
+        if ! jq . "$STATE_FILE" >/dev/null 2>&1; then
+            return 2
+        fi
+    fi
+    cat "$STATE_FILE"
+    return 0
 }
 
 # Show what changed since last doc generation.
 # Outputs list of files that were modified since the last checkpoint SHA.
 claudux_diff_since_last() {
-    local state
-    if ! state=$(load_claudux_state); then
+    local state rc
+    state=$(load_claudux_state)
+    rc=$?
+    if [[ $rc -eq 1 ]]; then
         echo "No previous checkpoint — run 'claudux update' first."
+        return 1
+    fi
+    if [[ $rc -eq 2 ]]; then
+        echo "Checkpoint file is corrupt — run 'claudux update' to refresh."
         return 1
     fi
 
@@ -81,11 +94,19 @@ claudux_diff_since_last() {
 # Show documentation freshness report.
 # Reads .claudux-state.json and prints a human-readable summary.
 claudux_status() {
-    local state
-    if ! state=$(load_claudux_state); then
+    local state rc
+    state=$(load_claudux_state)
+    rc=$?
+    if [[ $rc -eq 1 ]]; then
         echo "No documentation checkpoint found."
         echo ""
         echo "Run 'claudux update' to generate docs and create a checkpoint."
+        return 1
+    fi
+    if [[ $rc -eq 2 ]]; then
+        warn "Checkpoint file ($STATE_FILE) is corrupt — cannot parse JSON."
+        echo ""
+        echo "Run 'claudux update' to regenerate docs and create a fresh checkpoint."
         return 1
     fi
 
@@ -430,11 +451,13 @@ update() {
     local prompt
     prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
 
-    # Incremental mode: if a checkpoint exists, scope the update to changed files
+    # Incremental mode: if a checkpoint exists and is valid, scope to changed files.
+    # Corrupt state or missing file falls through to full scan silently.
     if [[ -f "$STATE_FILE" ]]; then
-        local changed_files
-        changed_files=$(claudux_diff_since_last 2>/dev/null) || changed_files=""
-        if [[ -n "$changed_files" ]]; then
+        local changed_files diff_rc
+        changed_files=$(claudux_diff_since_last 2>/dev/null)
+        diff_rc=$?
+        if [[ $diff_rc -eq 0 ]] && [[ -n "$changed_files" ]]; then
             local count
             count=$(echo "$changed_files" | wc -l | tr -d ' ')
             info "Incremental mode: $count file(s) changed since last run"
@@ -445,8 +468,10 @@ update() {
 Changed files: $file_list
 
 $prompt"
-        else
+        elif [[ $diff_rc -eq 0 ]]; then
             info "No source changes since last run — running full scan"
+        else
+            info "Checkpoint unusable — running full scan"
         fi
     fi
 
