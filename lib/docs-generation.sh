@@ -413,8 +413,15 @@ update() {
     
     local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
 
-    # Incremental mode: if a checkpoint exists, scope the update to changed files
+    # Incremental mode: if a valid checkpoint exists, scope the update to changed files.
+    # Guard: load_claudux_state returns 2 for corrupt state — skip incremental in that case.
+    local _state_rc=0
     if [[ -f "$STATE_FILE" ]]; then
+        load_claudux_state >/dev/null 2>&1 || _state_rc=$?
+    else
+        _state_rc=1
+    fi
+    if [[ $_state_rc -eq 0 ]]; then
         local changed_files
         changed_files=$(claudux_diff_since_last 2>/dev/null) || changed_files=""
         if [[ -n "$changed_files" ]]; then

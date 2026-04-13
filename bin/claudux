@@ -121,30 +121,59 @@ check_function() {
     fi
 }
 
-# Implement file locking for concurrent execution safety
+# Portable hash: use md5sum if available, else md5, else cksum.
+# Returns a short hex-like identifier for the given string on stdin.
+_claudux_hash() {
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum | cut -d' ' -f1
+    elif command -v md5 >/dev/null 2>&1; then
+        md5
+    else
+        # Last resort: cksum gives a decimal number — good enough for uniqueness
+        cksum | awk '{print $1}'
+    fi
+}
+
+# Implement file locking for concurrent execution safety.
+# Uses an atomic mkdir-based lock directory (mkdir is atomic on POSIX).
+# The lock directory contains a PID file for stale-lock detection.
 acquire_lock() {
-    local lock_file="${TMPDIR:-/tmp}/claudux-$(pwd | md5sum 2>/dev/null | cut -d' ' -f1 || pwd | md5 | awk '{print $NF}').lock"
+    local dir_hash
+    dir_hash=$(printf '%s' "$(pwd)" | _claudux_hash)
+    local lock_dir="${TMPDIR:-/tmp}/claudux-${dir_hash}.lock"
+    local lock_pid_file="$lock_dir/pid"
     local lock_pid
-    
-    # Check if lock file exists and if the process is still running
-    if [[ -f "$lock_file" ]]; then
-        lock_pid=$(cat "$lock_file" 2>/dev/null)
+
+    # Check for existing lock directory
+    if [[ -d "$lock_dir" ]]; then
+        lock_pid=$(cat "$lock_pid_file" 2>/dev/null)
         if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
             warn "Another claudux instance is already running (PID: $lock_pid)"
-            warn "Concurrent operations may cause conflicts"
-            # Continue anyway - just a warning
+            warn "Concurrent operations may cause state file conflicts"
+            warn "If this is stale, remove: $lock_dir"
+            return 1
         else
-            # Stale lock file, remove it
-            rm -f "$lock_file"
+            # Stale lock directory — previous process exited without cleanup
+            rm -rf "$lock_dir"
         fi
     fi
-    
-    # Create lock file with our PID
-    echo $$ > "$lock_file"
-    
-    # Set up cleanup on exit
-    trap "rm -f '$lock_file' 2>/dev/null" EXIT
-    
+
+    # Atomic lock acquisition: mkdir fails if another process beats us
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+        # Another process grabbed it between our check and mkdir
+        lock_pid=$(cat "$lock_pid_file" 2>/dev/null)
+        warn "Lock contention — another claudux instance may be running (PID: ${lock_pid:-unknown})"
+        return 1
+    fi
+
+    # Write our PID into the lock dir
+    echo $$ > "$lock_pid_file"
+
+    # Register cleanup that chains with existing EXIT trap
+    _claudux_lock_dir="$lock_dir"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$lock_dir' 2>/dev/null; $(trap -p EXIT | sed "s/^trap -- '//; s/' EXIT$//")" EXIT
+
     return 0
 }
 
@@ -229,7 +258,9 @@ main() {
             # Acquire lock for commands that modify files
             case "${1:-}" in
                 "update"|"recreate"|"template"|""|"serve"|"server"|"dev")
-                    acquire_lock
+                    if ! acquire_lock; then
+                        error_exit "Could not acquire lock — another claudux instance may be running. Remove stale lock if needed."
+                    fi
                     ;;
             esac
             ;;
