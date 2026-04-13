@@ -5,6 +5,7 @@ STATE_FILE=".claudux-state.json"
 
 # Save a change-tracking checkpoint after successful doc generation.
 # Records HEAD SHA, timestamp, backend used, and which files were documented.
+# Uses atomic write (temp file + mv) to prevent corruption on interrupt.
 save_claudux_state() {
     local head_sha
     head_sha=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -28,7 +29,12 @@ save_claudux_state() {
         # files_json stays "[]" when docs/ has no tracked files
     fi
 
-    cat > "$STATE_FILE" <<EOJSON
+    # Atomic write: write to temp file in same directory, then mv.
+    # This prevents half-written state files if the process is killed mid-write.
+    local tmp_state
+    tmp_state="${STATE_FILE}.tmp.$$"
+
+    cat > "$tmp_state" <<EOJSON
 {
   "last_sha": "$head_sha",
   "last_run": "$timestamp",
@@ -36,16 +42,46 @@ save_claudux_state() {
   "files_documented": $files_json
 }
 EOJSON
+
+    # Validate the temp file contains parseable JSON before committing
+    if command -v jq >/dev/null 2>&1; then
+        if ! jq . "$tmp_state" >/dev/null 2>&1; then
+            warn "Generated state file is invalid JSON — not saving (bug in save_claudux_state)"
+            rm -f "$tmp_state"
+            return 1
+        fi
+    fi
+
+    mv -f "$tmp_state" "$STATE_FILE"
     info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
 }
 
 # Load existing state file. Prints JSON to stdout. Returns 1 if no state.
+# Validates JSON structure before returning. Returns 2 if file exists but is corrupt.
 load_claudux_state() {
-    if [[ -f "$STATE_FILE" ]]; then
-        cat "$STATE_FILE"
-        return 0
+    if [[ ! -f "$STATE_FILE" ]]; then
+        return 1
     fi
-    return 1
+
+    local content
+    content=$(cat "$STATE_FILE")
+
+    # Basic structural check: must contain last_sha field
+    if ! echo "$content" | grep -q '"last_sha"'; then
+        warn "State file $STATE_FILE is corrupt (missing last_sha). Ignoring."
+        return 2
+    fi
+
+    # If jq is available, do a full JSON validation
+    if command -v jq >/dev/null 2>&1; then
+        if ! echo "$content" | jq . >/dev/null 2>&1; then
+            warn "State file $STATE_FILE contains invalid JSON. Ignoring."
+            return 2
+        fi
+    fi
+
+    echo "$content"
+    return 0
 }
 
 # Show what changed since last doc generation.
@@ -539,16 +575,33 @@ $prompt"
         run_claude_once
     fi
     claude_exit_code=$?
-    
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Log Claude invocation result
+
+    # Log CLI invocation result — detect crashes and partial output
     if [[ $claude_exit_code -ne 0 ]]; then
-        warn "❌ Claude CLI exited with code: $claude_exit_code"
+        local backend_label="${backend:-claude}"
+        if [[ $claude_exit_code -eq 124 ]]; then
+            warn "Timeout: $backend_label CLI exceeded time limit"
+        elif [[ $claude_exit_code -eq 137 ]]; then
+            warn "Crash: $backend_label CLI was killed (SIGKILL/OOM, exit 137)"
+        elif [[ $claude_exit_code -eq 139 ]]; then
+            warn "Crash: $backend_label CLI segfaulted (exit 139)"
+        elif [[ $claude_exit_code -eq 130 ]]; then
+            warn "Interrupted: $backend_label CLI received SIGINT (exit 130)"
+        else
+            warn "$backend_label CLI exited with code: $claude_exit_code"
+        fi
         if [[ -f "$claude_log" ]]; then
-            warn "📋 Last output from Claude:"
-            tail -20 "$claude_log" | sed 's/^/   /'
+            local log_size
+            log_size=$(wc -c < "$claude_log" 2>/dev/null | tr -d ' ')
+            if [[ "${log_size:-0}" -eq 0 ]]; then
+                warn "No output was captured — $backend_label may have crashed before producing any output"
+            else
+                warn "Last output from $backend_label:"
+                tail -20 "$claude_log" | sed 's/^/   /'
+            fi
         fi
     fi
     

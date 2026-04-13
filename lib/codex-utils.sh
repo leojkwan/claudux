@@ -64,6 +64,12 @@ run_codex_exec() {
     local stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
     local timeout_secs="${CLAUDUX_TIMEOUT:-600}"
 
+    # Guard: verify codex is still reachable (PATH may have changed since source)
+    if ! command -v codex >/dev/null 2>&1; then
+        echo '{"type":"error","message":"codex CLI not found in PATH at execution time"}' >&2
+        return 127
+    fi
+
     local codex_args=(
         exec
         -m "$model"
