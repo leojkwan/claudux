@@ -109,8 +109,8 @@ rm -rf "$TEST_DIR"
 TEST_DIR=$(setup_repo)
 (
     cd "$TEST_DIR"
-    STATE_FILE="$TEST_DIR/.claudux-state.json"
     source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
     save_claudux_state
     loaded=$(load_claudux_state)
     echo "$loaded" | grep -c '"last_sha"'

@@ -64,9 +64,27 @@ This creates a preferences file that guides documentation generation. Example st
 
 ## Environment Variables
 
+### Backend Selection
+
+Switch between AI backends:
+
+```bash
+# Default -- uses Claude
+claudux update
+
+# Use Codex instead
+CLAUDUX_BACKEND=codex claudux update
+
+# Codex-specific settings
+export CLAUDUX_BACKEND=codex
+export CODEX_MODEL=gpt-5.4            # default
+export CODEX_REASONING_EFFORT=xhigh   # default
+claudux update
+```
+
 ### Model Selection
 
-Control which Claude model to use:
+Control which Claude model to use (when using the default Claude backend):
 
 ```bash
 # Force Opus (more capable, slower)
@@ -229,6 +247,10 @@ claudux check  # Diagnose issues
 
 **Model authentication:**
 ```bash
+# Claude backend
 claude config get  # Verify auth status
 claude config      # Re-authenticate if needed
+
+# Codex backend
+codex --version    # Verify installation
 ```

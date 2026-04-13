@@ -15,20 +15,23 @@ fnm install 18
 fnm use 18
 ```
 
-**Claude CLI**  
-Install and authenticate the Claude CLI:
+**AI Backend CLI**
+
+claudux supports Claude (default) and Codex as backends. Install at least one:
 
 ```bash
-# Install Claude CLI
+# Claude (default backend)
 npm install -g @anthropic-ai/claude-cli
+claude config  # authenticate
 
-# Authenticate (follow the prompts)
-claude config
+# Codex (alternative backend)
+npm install -g @openai/codex
+# Set CLAUDUX_BACKEND=codex to use
 ```
 
 Verify your setup:
 ```bash
-claude config get
+claudux check  # shows active backend and CLI status
 ```
 
 ## Install Claudux
@@ -74,7 +77,8 @@ claudux check
 
 This command validates:
 - Node.js version and availability
-- Claude CLI installation and authentication
+- Active backend (Claude or Codex)
+- Backend CLI installation and authentication
 - Documentation directory status
 
 Example output:
@@ -82,16 +86,22 @@ Example output:
 🔎 Environment check
 
 • Node: v18.17.0
-• Claude: claude-cli/1.2.3
+• Backend: claude
+• Claude CLI: installed
+• Model: sonnet
 • docs/: not present (will be created on first run)
 ```
 
 ## Troubleshooting
 
-**Claude CLI not found**
+**Backend CLI not found**
 ```bash
+# For Claude (default)
 npm install -g @anthropic-ai/claude-cli
 claude config
+
+# For Codex
+npm install -g @openai/codex
 ```
 
 **Permission errors**

@@ -18,9 +18,13 @@ claudux serve       # preview at localhost:5173
 ```
 bin/claudux          CLI entry point (bash)
 lib/                 Library modules (colors, project detection, docs generation, etc.)
-lib/templates/       VitePress scaffolding templates
+lib/codex-utils.sh   Codex backend adapter (loaded when CLAUDUX_BACKEND=codex)
+lib/templates/       Per-framework prompt configs (React, Next.js, iOS, Go, etc.)
+lib/vitepress/       VitePress scaffolding (config template, theme, vite config)
+tests/               Pure-bash test suites (183 tests, zero deps)
 docs/                Generated VitePress site (committed to repo)
-assets/              Static assets (hero image, etc.)
+assets/              Static assets (banner SVG, terminal demo, hero image)
+.github/             CI workflows and issue/PR templates
 ```
 
 ### Code style
