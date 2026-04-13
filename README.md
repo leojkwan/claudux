@@ -68,7 +68,7 @@ claudux serve           # Start dev server
 claudux check           # Verify environment (Node, Claude CLI)
 claudux template        # Generate claudux.md preferences
 claudux recreate        # Delete docs and start over
-claudux --version       # Print version
+claudux --version       # Show installed version
 claudux --help          # Full options
 ```
 

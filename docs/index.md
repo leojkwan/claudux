@@ -74,10 +74,15 @@ Claudux uses a **two-phase flow** to produce reliable docs:
 
 | Command | Purpose |
 |---------|---------|
+| `claudux` | Interactive menu (adapts to project state) |
 | `claudux update` | Generate/update docs (includes cleanup & validation) |
+| `claudux update -m "..."` | Update with a focused directive for Claude |
 | `claudux serve` | Start dev server at localhost:5173 |
 | `claudux recreate` | Start fresh (delete all docs) |
 | `claudux template` | Generate claudux.md (docs preferences) |
+| `claudux check` | Verify environment (Node, Claude CLI, docs) |
+| `claudux --version` | Show installed version |
+| `claudux --help` | Show help and usage |
 
 ## Requirements
 
