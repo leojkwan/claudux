@@ -226,18 +226,13 @@ check_generation_backend() {
 
 # Main function
 main() {
-    # Skip dependency validation for version and help commands
+    # Only validate dependencies for commands that need the LLM backend.
+    # Unknown commands skip validation and fall through to the error handler.
     case "${1:-}" in
-        "--version"|"version"|-V|"help"|"-h"|"--help"|"check"|"--check"|"diff"|"status"|"validate")
-            ;;
-        *)
+        "update"|"recreate"|"template"|""|"serve"|"server"|"dev")
             validate_dependencies
             # Acquire lock for commands that modify files
-            case "${1:-}" in
-                "update"|"recreate"|"template"|""|"serve"|"server"|"dev")
-                    acquire_lock
-                    ;;
-            esac
+            acquire_lock
             ;;
     esac
     

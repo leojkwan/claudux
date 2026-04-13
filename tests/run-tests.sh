@@ -199,6 +199,13 @@ else
     fail "unknown command should say 'Unknown command'" "got: $unknown_output"
 fi
 
+# Regression: unknown commands must NOT trigger dependency validation (GH CI has no claude CLI)
+if echo "$unknown_output" | grep -qi "required but not installed"; then
+    fail "unknown command should not trigger dependency validation" "got: $unknown_output"
+else
+    pass "unknown command skips dependency validation"
+fi
+
 # ── 7. Check command ────────────────────────────────────────────────
 section "CLI: check"
 
