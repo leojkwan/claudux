@@ -42,3 +42,6 @@ documents/
 *.key
 *.pem
 secrets/
+
+# claudux change tracking state (local per-dev)
+.claudux-state.json

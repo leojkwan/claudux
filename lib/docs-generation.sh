@@ -15,10 +15,17 @@ save_claudux_state() {
     # Collect documented files (everything under docs/ tracked by git + untracked new)
     local files_json="[]"
     if command -v git >/dev/null 2>&1; then
-        files_json=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
-            printf '"%s",' "$f"
-        done | sed 's/,$//' | sed 's/^/[/' | sed 's/$/]/')
-        [[ "$files_json" == "[]" ]] || true
+        local raw_files
+        raw_files=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
+            # Escape backslashes and double-quotes for valid JSON strings
+            local escaped
+            escaped=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            printf '"%s",' "$escaped"
+        done | sed 's/,$//')
+        if [[ -n "$raw_files" ]]; then
+            files_json="[$raw_files]"
+        fi
+        # files_json stays "[]" when docs/ has no tracked files
     fi
 
     cat > "$STATE_FILE" <<EOJSON
@@ -119,6 +126,7 @@ claudux_status() {
         fi
     fi
 }
+
 
 # Build the comprehensive prompt for Claude
 build_generation_prompt() {
@@ -418,7 +426,27 @@ update() {
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
     local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
-    
+
+    # Incremental mode: if a checkpoint exists, scope the update to changed files
+    if [[ -f "$STATE_FILE" ]]; then
+        local changed_files
+        changed_files=$(claudux_diff_since_last 2>/dev/null) || changed_files=""
+        if [[ -n "$changed_files" ]]; then
+            local count
+            count=$(echo "$changed_files" | wc -l | tr -d ' ')
+            info "Incremental mode: $count file(s) changed since last run"
+            local file_list
+            file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
+            prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.
+
+Changed files: $file_list
+
+$prompt"
+        else
+            info "No source changes since last run — running full scan"
+        fi
+    fi
+
     # Check if prompt was built successfully
     if [[ -z "$prompt" ]]; then
         warn "❌ Failed to build generation prompt"
@@ -518,9 +546,48 @@ update() {
         return $ec
     }
 
-    # Launch generation once
+    # Function: run Codex once and stream output; return exit code
+    run_codex_once() {
+        local started=false
+        : > "$claude_log"
+
+        IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
+        info "Model: $codex_model_name"
+
+        ( run_codex_exec "$prompt" | tee "$claude_log" ) | format_codex_output_stream &
+        local stream_pid=$!
+
+        for _ in $(seq 1 30); do
+            if [[ -s "$claude_log" ]]; then
+                started=true
+                break
+            fi
+            sleep 1
+        done
+
+        if ! $started; then
+            warn "No visible progress after 30s"
+            kill "$stream_pid" 2>/dev/null || true
+            wait "$stream_pid" 2>/dev/null || true
+            return 124
+        fi
+
+        trap 'echo ""; warn "Interrupt received, stopping generation..."; kill -TERM ${stream_pid} 2>/dev/null || true; [[ -n "$progress_pid" ]] && kill $progress_pid 2>/dev/null || true; wait ${stream_pid} 2>/dev/null || true; exit 130' INT
+        wait ${stream_pid}
+        local ec=$?
+        trap - INT
+        return $ec
+    }
+
+    # Launch generation — route based on CLAUDUX_BACKEND
+    local backend="${CLAUDUX_BACKEND:-claude}"
     claude_exit_code=1
-    run_claude_once
+    if [[ "$backend" == "codex" ]]; then
+        info "Backend: Codex"
+        run_codex_once
+    else
+        run_claude_once
+    fi
     claude_exit_code=$?
     
     echo ""
@@ -608,7 +675,10 @@ update() {
         # Show detailed change summary
         info "📋 Step 4: Analyzing changes made..."
         show_detailed_changes
-        
+
+        # Save change tracking checkpoint
+        save_claudux_state
+
     else
         warn "Claude Code failed with exit code $claude_exit_code"
         echo ""

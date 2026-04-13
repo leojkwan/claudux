@@ -197,6 +197,7 @@ show_help() {
     echo ""
     echo "Environment:"
     echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: sonnet)"
+    echo "  CLAUDUX_BACKEND=codex    - Use Codex/GPT-5.4 instead of Claude"
     echo "  CLAUDUX_MESSAGE=...      - Default directive if -m/--with not provided"
     echo ""
     echo "💡 The main update command automatically:"
