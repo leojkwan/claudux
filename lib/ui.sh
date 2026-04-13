@@ -4,8 +4,13 @@
 # Show the main header
 show_header() {
     load_project_config
+    local backend="${CLAUDUX_BACKEND:-claude}"
+    local powered_by="Claude AI"
+    if [[ "$backend" == "codex" ]]; then
+        powered_by="Codex (GPT-5.4)"
+    fi
     echo "📚 claudux - ${PROJECT_NAME} Documentation"
-    echo "Powered by Claude AI - Everything stays local"
+    echo "Powered by $powered_by - Everything stays local"
     echo ""
 }
 

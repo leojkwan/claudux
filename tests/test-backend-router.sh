@@ -79,7 +79,29 @@ check_block=$(sed -n '/"check"|"--check"/,/;;/p' "$REPO_ROOT/bin/claudux")
 assert_contains "check shows backend" "$check_block" 'CLAUDUX_BACKEND'
 assert_contains "check shows codex model" "$check_block" 'CODEX_MODEL'
 
+# --- Test 11: show_header says "Claude AI" under default backend ---
+(
+    unset CLAUDUX_BACKEND 2>/dev/null || true
+    "$REPO_ROOT/bin/claudux" check 2>&1 | head -2
+) > /tmp/claudux-test-header-claude 2>&1
+assert_contains "default header mentions Claude AI" \
+    "$(cat /tmp/claudux-test-header-claude)" \
+    "Powered by Claude AI"
+
+# --- Test 12: show_header switches to Codex when CLAUDUX_BACKEND=codex ---
+(
+    export CLAUDUX_BACKEND=codex
+    "$REPO_ROOT/bin/claudux" check 2>&1 | head -2
+) > /tmp/claudux-test-header-codex 2>&1
+assert_contains "codex header mentions Codex" \
+    "$(cat /tmp/claudux-test-header-codex)" \
+    "Powered by Codex"
+assert_not_contains "codex header does NOT say Claude AI" \
+    "$(cat /tmp/claudux-test-header-codex)" \
+    "Powered by Claude AI"
+
 # Cleanup
 rm -f /tmp/claudux-test-backend-default /tmp/claudux-test-backend-codex /tmp/claudux-test-missing
+rm -f /tmp/claudux-test-header-claude /tmp/claudux-test-header-codex
 
 test_summary
