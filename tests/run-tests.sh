@@ -1,118 +1,381 @@
 #!/bin/bash
-# Minimal test suite for claudux — no dependencies, plain bash
-set -euo pipefail
+# claudux CLI integration test suite
+# Zero dependencies — pure bash. Exit 1 on any failure.
+#
+# Usage:
+#   bash tests/run-tests.sh          # run from repo root
+#   bash tests/run-tests.sh -v       # verbose (show pass details)
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LIB_DIR="$PROJECT_ROOT/lib"
-BIN="$PROJECT_ROOT/bin/claudux"
+set -uo pipefail
 
-passed=0
-failed=0
-total=0
+# ── Globals ──────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PASS=0
+FAIL=0
+SKIP=0
+VERBOSE=false
+[[ "${1:-}" == "-v" ]] && VERBOSE=true
 
+# ── Helpers ──────────────────────────────────────────────────────────
 pass() {
-    ((passed++))
-    ((total++))
-    echo "  PASS: $1"
+    PASS=$((PASS + 1))
+    $VERBOSE && printf "  \033[32mPASS\033[0m  %s\n" "$1"
 }
 
 fail() {
-    ((failed++))
-    ((total++))
-    echo "  FAIL: $1"
-    [[ -n "${2:-}" ]] && echo "        $2"
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  %s\n" "$1"
+    [[ -n "${2:-}" ]] && printf "        %s\n" "$2"
+}
+
+skip() {
+    SKIP=$((SKIP + 1))
+    $VERBOSE && printf "  \033[33mSKIP\033[0m  %s\n" "$1"
 }
 
 section() {
     echo ""
-    echo "--- $1 ---"
+    printf "\033[1m── %s ──\033[0m\n" "$1"
 }
 
-# ─── Structure tests ───
-
+# ── 1. File structure ────────────────────────────────────────────────
 section "File structure"
 
-[[ -f "$BIN" ]] && pass "bin/claudux exists" || fail "bin/claudux missing"
-[[ -x "$BIN" ]] && pass "bin/claudux is executable" || fail "bin/claudux not executable"
-[[ -f "$LIB_DIR/claude-utils.sh" ]] && pass "lib/claude-utils.sh exists" || fail "lib/claude-utils.sh missing"
-[[ -f "$LIB_DIR/docs-generation.sh" ]] && pass "lib/docs-generation.sh exists" || fail "lib/docs-generation.sh missing"
-[[ -f "$LIB_DIR/colors.sh" ]] && pass "lib/colors.sh exists" || fail "lib/colors.sh missing"
-[[ -f "$LIB_DIR/project.sh" ]] && pass "lib/project.sh exists" || fail "lib/project.sh missing"
+required_files=(
+    "bin/claudux"
+    "lib/colors.sh"
+    "lib/project.sh"
+    "lib/content-protection.sh"
+    "lib/claude-utils.sh"
+    "lib/git-utils.sh"
+    "lib/docs-generation.sh"
+    "lib/cleanup.sh"
+    "lib/server.sh"
+    "lib/ui.sh"
+    "lib/validate-links.sh"
+    "package.json"
+    "README.md"
+    "LICENSE"
+)
 
-# ─── Library sourcing tests ───
-
-section "Library sourcing"
-
-for lib in colors.sh project.sh content-protection.sh claude-utils.sh git-utils.sh cleanup.sh server.sh ui.sh; do
-    if bash -n "$LIB_DIR/$lib" 2>/dev/null; then
-        pass "$lib parses without syntax errors"
+for f in "${required_files[@]}"; do
+    if [[ -f "$REPO_ROOT/$f" ]]; then
+        pass "exists: $f"
     else
-        fail "$lib has syntax errors"
+        fail "missing: $f"
     fi
 done
 
-# ─── Codex adapter tests ───
+# bin/claudux must be executable
+if [[ -x "$REPO_ROOT/bin/claudux" ]]; then
+    pass "bin/claudux is executable"
+else
+    fail "bin/claudux is not executable"
+fi
 
-section "Codex adapter"
+# ── 2. Library syntax ────────────────────────────────────────────────
+section "Library syntax (bash -n)"
 
-if [[ -f "$LIB_DIR/codex-utils.sh" ]]; then
-    pass "lib/codex-utils.sh exists"
-    if bash -n "$LIB_DIR/codex-utils.sh" 2>/dev/null; then
-        pass "codex-utils.sh parses without syntax errors"
+for lib in "$REPO_ROOT"/lib/*.sh; do
+    name="$(basename "$lib")"
+    if bash -n "$lib" 2>/dev/null; then
+        pass "syntax OK: $name"
     else
-        fail "codex-utils.sh has syntax errors"
+        fail "syntax error: $name"
     fi
+done
+
+# bin/claudux syntax
+if bash -n "$REPO_ROOT/bin/claudux" 2>/dev/null; then
+    pass "syntax OK: bin/claudux"
 else
-    echo "  SKIP: lib/codex-utils.sh not installed (Codex adapter is optional)"
+    fail "syntax error: bin/claudux"
 fi
 
-# ─── CLI tests ───
+# ── 3. Version command ───────────────────────────────────────────────
+section "CLI: version"
 
-section "CLI"
+version_output=$("$REPO_ROOT/bin/claudux" --version 2>/dev/null)
+version_exit=$?
 
-version_output=$("$BIN" --version 2>&1 || true)
-if [[ "$version_output" =~ [0-9]+\.[0-9]+ ]]; then
-    pass "--version outputs a version number: $version_output"
+if [[ $version_exit -eq 0 ]]; then
+    pass "--version exits 0"
 else
-    fail "--version didn't output a version" "$version_output"
+    fail "--version exits $version_exit"
 fi
 
-help_output=$("$BIN" --help 2>&1 || true)
-if [[ "$help_output" =~ "update" ]] && [[ "$help_output" =~ "serve" ]]; then
-    pass "--help mentions update and serve commands"
+# Output should start with "claudux "
+if [[ "$version_output" == claudux\ * ]]; then
+    pass "--version output starts with 'claudux '"
 else
-    fail "--help missing expected commands"
+    fail "--version output unexpected: $version_output"
 fi
 
-# ─── Backend router tests ───
+# Version should match package.json
+pkg_version=$(grep '"version"' "$REPO_ROOT/package.json" | head -1 | sed 's/.*"\([0-9][0-9.]*\)".*/\1/')
+if [[ "$version_output" == "claudux $pkg_version" ]]; then
+    pass "--version matches package.json ($pkg_version)"
+else
+    fail "--version mismatch: got '$version_output', expected 'claudux $pkg_version'"
+fi
 
-section "Backend router"
-
-# These tests verify the Codex adapter integration — skip if not yet merged
-if grep -q 'CLAUDUX_BACKEND' "$LIB_DIR/docs-generation.sh" 2>/dev/null; then
-    pass "docs-generation.sh references CLAUDUX_BACKEND"
-
-    if grep -q 'run_codex_once' "$LIB_DIR/docs-generation.sh" 2>/dev/null; then
-        pass "docs-generation.sh has run_codex_once function"
+# All three aliases should produce the same output
+for flag in "--version" "version" "-V"; do
+    alt_output=$("$REPO_ROOT/bin/claudux" "$flag" 2>/dev/null)
+    if [[ "$alt_output" == "$version_output" ]]; then
+        pass "'$flag' produces consistent output"
     else
-        fail "docs-generation.sh missing run_codex_once"
+        fail "'$flag' output differs: $alt_output"
     fi
+done
 
-    if grep -q 'CLAUDUX_BACKEND.*codex' "$BIN" 2>/dev/null; then
-        pass "bin/claudux conditionally sources codex-utils.sh"
-    else
-        fail "bin/claudux missing conditional codex sourcing"
-    fi
+# ── 4. Help command ──────────────────────────────────────────────────
+section "CLI: help"
+
+help_output=$("$REPO_ROOT/bin/claudux" help 2>/dev/null)
+help_exit=$?
+
+if [[ $help_exit -eq 0 ]]; then
+    pass "help exits 0"
 else
-    echo "  SKIP: Codex backend router not yet merged"
+    fail "help exits $help_exit"
 fi
 
-# ─── Summary ───
+# Help should mention key commands
+for keyword in "update" "serve" "recreate" "template" "help"; do
+    if echo "$help_output" | grep -qi "$keyword"; then
+        pass "help mentions '$keyword'"
+    else
+        fail "help missing '$keyword'"
+    fi
+done
 
+# All help aliases produce the same output
+for flag in "help" "-h" "--help"; do
+    alt=$("$REPO_ROOT/bin/claudux" "$flag" 2>/dev/null)
+    if [[ "$alt" == "$help_output" ]]; then
+        pass "'$flag' produces consistent help"
+    else
+        fail "'$flag' help differs"
+    fi
+done
+
+# ── 5. Help-to-CLI consistency ───────────────────────────────────────
+section "Help-to-CLI consistency"
+
+# Extract commands advertised in show_help (lines matching "./claudux <word>")
+advertised_cmds=$(echo "$help_output" | grep -oE '\./claudux [a-z]+' | awk '{print $2}' | sort -u)
+
+# Extract commands handled in main()'s case statement
+handled_cmds=$(grep -E '^\s+"[a-z]' "$REPO_ROOT/bin/claudux" | grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
+
+# Every advertised command should be handled
+for cmd in $advertised_cmds; do
+    # skip "claudux" itself (the bare invocation)
+    [[ "$cmd" == "claudux" ]] && continue
+    if echo "$handled_cmds" | grep -qx "$cmd"; then
+        pass "advertised '$cmd' is handled in main()"
+    else
+        fail "advertised '$cmd' has NO handler in main()" "help says it exists but running it would hit 'Unknown command'"
+    fi
+done
+
+# ── 6. Unknown command ───────────────────────────────────────────────
+section "CLI: unknown command"
+
+unknown_output=$("$REPO_ROOT/bin/claudux" this-is-not-a-command 2>&1)
+unknown_exit=$?
+
+if [[ $unknown_exit -ne 0 ]]; then
+    pass "unknown command exits non-zero ($unknown_exit)"
+else
+    fail "unknown command should exit non-zero but exited 0"
+fi
+
+if echo "$unknown_output" | grep -qi "unknown"; then
+    pass "unknown command mentions 'unknown' in output"
+else
+    fail "unknown command should say 'Unknown command'" "got: $unknown_output"
+fi
+
+# ── 7. Check command ────────────────────────────────────────────────
+section "CLI: check"
+
+check_output=$("$REPO_ROOT/bin/claudux" check 2>&1)
+check_exit=$?
+
+if [[ $check_exit -eq 0 ]]; then
+    pass "check exits 0"
+else
+    # check may fail if dependencies are missing (e.g., claude CLI) — that's OK in CI
+    skip "check exited $check_exit (likely missing claude CLI)"
+fi
+
+if echo "$check_output" | grep -qi "node"; then
+    pass "check reports Node status"
+else
+    fail "check should report Node status"
+fi
+
+# ── 8. Project type detection ─────────────────────────────────────────
+section "Project detection"
+
+# Source project.sh to get detect_project_type
+(
+    export LIB_DIR="$REPO_ROOT/lib"
+    source "$REPO_ROOT/lib/project.sh"
+
+    # Test in repo root (has package.json → should detect javascript)
+    cd "$REPO_ROOT"
+    result=$(detect_project_type)
+    echo "CLAUDUX_TYPE=$result"
+
+    # Test with a fake iOS project
+    tmp=$(mktemp -d)
+    cd "$tmp"
+    mkdir -p Test.xcodeproj
+    result=$(detect_project_type)
+    echo "IOS_TYPE=$result"
+    rm -rf "$tmp"
+
+    # Test with a fake Python project
+    tmp=$(mktemp -d)
+    cd "$tmp"
+    touch requirements.txt
+    result=$(detect_project_type)
+    echo "PY_TYPE=$result"
+    rm -rf "$tmp"
+
+    # Test with a fake Go project
+    tmp=$(mktemp -d)
+    cd "$tmp"
+    touch go.mod
+    result=$(detect_project_type)
+    echo "GO_TYPE=$result"
+    rm -rf "$tmp"
+
+    # Test with empty dir (generic)
+    tmp=$(mktemp -d)
+    cd "$tmp"
+    result=$(detect_project_type)
+    echo "EMPTY_TYPE=$result"
+    rm -rf "$tmp"
+) > /tmp/claudux-detect-test 2>&1
+
+detect_result=$(cat /tmp/claudux-detect-test)
+rm -f /tmp/claudux-detect-test
+
+if echo "$detect_result" | grep -q "CLAUDUX_TYPE=javascript"; then
+    pass "detect_project_type: claudux repo -> javascript"
+else
+    actual=$(echo "$detect_result" | grep CLAUDUX_TYPE | head -1)
+    fail "detect_project_type: claudux repo expected 'javascript'" "$actual"
+fi
+
+if echo "$detect_result" | grep -q "IOS_TYPE=ios"; then
+    pass "detect_project_type: .xcodeproj -> ios"
+else
+    actual=$(echo "$detect_result" | grep IOS_TYPE | head -1)
+    fail "detect_project_type: .xcodeproj expected 'ios'" "$actual"
+fi
+
+if echo "$detect_result" | grep -q "PY_TYPE=python"; then
+    pass "detect_project_type: requirements.txt -> python"
+else
+    actual=$(echo "$detect_result" | grep PY_TYPE | head -1)
+    fail "detect_project_type: requirements.txt expected 'python'" "$actual"
+fi
+
+if echo "$detect_result" | grep -q "GO_TYPE=go"; then
+    pass "detect_project_type: go.mod -> go"
+else
+    actual=$(echo "$detect_result" | grep GO_TYPE | head -1)
+    fail "detect_project_type: go.mod expected 'go'" "$actual"
+fi
+
+if echo "$detect_result" | grep -q "EMPTY_TYPE=generic"; then
+    pass "detect_project_type: empty dir -> generic"
+else
+    actual=$(echo "$detect_result" | grep EMPTY_TYPE | head -1)
+    fail "detect_project_type: empty dir expected 'generic'" "$actual"
+fi
+
+# ── 9. Package.json consistency ───────────────────────────────────────
+section "Package.json"
+
+# Verify required fields exist
+for field in "name" "version" "description" "bin" "license" "engines"; do
+    if grep -q "\"$field\"" "$REPO_ROOT/package.json"; then
+        pass "package.json has '$field'"
+    else
+        fail "package.json missing '$field'"
+    fi
+done
+
+# Verify bin points to existing file
+bin_path=$(grep -o '"./[^"]*"' "$REPO_ROOT/package.json" | head -1 | tr -d '"')
+if [[ -n "$bin_path" ]] && [[ -f "$REPO_ROOT/$bin_path" ]]; then
+    pass "bin target exists: $bin_path"
+else
+    fail "bin target missing: $bin_path"
+fi
+
+# Verify no dependencies (claudux is zero-dep)
+dep_count=$(grep -c '"dependencies"' "$REPO_ROOT/package.json")
+if [[ $dep_count -gt 0 ]]; then
+    # Check that dependencies is empty
+    dep_block=$(python3 -c "import json; d=json.load(open('$REPO_ROOT/package.json')); print(len(d.get('dependencies',{})))" 2>/dev/null || echo "unknown")
+    if [[ "$dep_block" == "0" ]]; then
+        pass "zero runtime dependencies"
+    elif [[ "$dep_block" == "unknown" ]]; then
+        skip "could not parse dependencies (no python3)"
+    else
+        fail "expected zero dependencies, found $dep_block"
+    fi
+fi
+
+# ── 10. README accuracy ──────────────────────────────────────────────
+section "README accuracy"
+
+readme="$REPO_ROOT/README.md"
+
+# README should mention the npm package name
+if grep -q "claudux" "$readme"; then
+    pass "README mentions package name"
+else
+    fail "README should mention 'claudux'"
+fi
+
+# README should have install instructions
+if grep -q "npm install" "$readme"; then
+    pass "README has install instructions"
+else
+    fail "README missing install instructions"
+fi
+
+# README should mention Node requirement
+if grep -qi "node" "$readme"; then
+    pass "README mentions Node requirement"
+else
+    fail "README should mention Node requirement"
+fi
+
+# README should mention Claude CLI requirement
+if grep -qi "claude" "$readme"; then
+    pass "README mentions Claude CLI"
+else
+    fail "README should mention Claude CLI"
+fi
+
+# ── Summary ──────────────────────────────────────────────────────────
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Results: $passed passed, $failed failed, $total total"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+total=$((PASS + FAIL + SKIP))
+printf "Results: \033[32m%d passed\033[0m" "$PASS"
+[[ $FAIL -gt 0 ]] && printf ", \033[31m%d failed\033[0m" "$FAIL"
+[[ $SKIP -gt 0 ]] && printf ", \033[33m%d skipped\033[0m" "$SKIP"
+printf " / %d total\n" "$total"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-[[ $failed -eq 0 ]] && exit 0 || exit 1
+[[ $FAIL -eq 0 ]] && exit 0 || exit 1

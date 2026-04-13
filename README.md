@@ -62,10 +62,13 @@ Everything runs locally — your code never leaves your machine.
 
 ```bash
 claudux                 # Interactive menu
-claudux update          # Generate/update docs  
+claudux update          # Generate/update docs
 claudux update -m "..." # Update with specific focus
 claudux serve           # Start dev server
+claudux check           # Verify environment (Node, Claude CLI)
+claudux template        # Generate claudux.md preferences
 claudux recreate        # Delete docs and start over
+claudux --version       # Print version
 claudux --help          # Full options
 ```
 
