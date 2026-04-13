@@ -251,7 +251,7 @@ TEST_DIR=$(setup_repo)
     cd "$TEST_DIR"
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t12 2>&1
-assert_contains "status with no state shows instruction" "$(cat /tmp/claudux-integ-t12)" "No checkpoint found"
+assert_contains "status with no state shows instruction" "$(cat /tmp/claudux-integ-t12)" "No documentation checkpoint found"
 rm -rf "$TEST_DIR"
 
 # --- Test 13: claudux diff shows changed files after save + commit ---
@@ -287,8 +287,10 @@ TEST_DIR=$(setup_repo)
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t14 2>&1
 result14=$(cat /tmp/claudux-integ-t14)
-assert_contains "status CLI shows last documented" "$result14" "Last documented:"
+assert_contains "status CLI shows last generated" "$result14" "Last generated:"
 assert_contains "status CLI shows backend" "$result14" "Backend:"
+assert_contains "status CLI shows checkpoint SHA" "$result14" "Checkpoint SHA:"
+assert_contains "status CLI shows documented files count" "$result14" "Documented files:"
 rm -rf "$TEST_DIR"
 
 # --- Test 15: claudux status shows stale count after new commit ---
@@ -308,8 +310,24 @@ TEST_DIR=$(setup_repo)
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t15 2>&1
 result15=$(cat /tmp/claudux-integ-t15)
-assert_contains "status shows stale file count" "$result15" "file(s) changed"
-assert_contains "status shows stale files" "$result15" "Stale files:"
+assert_contains "status shows commits behind" "$result15" "commit(s) behind HEAD"
+assert_contains "status suggests claudux diff" "$result15" "claudux diff"
+rm -rf "$TEST_DIR"
+
+# --- Test 15b: claudux status with corrupt state file produces a useful message ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    echo "NOT JSON {{{" > .claudux-state.json
+    bash "$REPO_ROOT/bin/claudux" status 2>&1
+    echo "exit:$?"
+) > /tmp/claudux-integ-t15b 2>&1
+result15b=$(cat /tmp/claudux-integ-t15b)
+# When jq is available, we get the corrupt detection; else we fall back to 'No checkpoint' style
+if command -v jq >/dev/null 2>&1; then
+    assert_contains "status with corrupt state warns" "$result15b" "corrupt"
+fi
+assert_contains "status with corrupt state exits non-zero" "$result15b" "exit:1"
 rm -rf "$TEST_DIR"
 
 # ═══════════════════════════════════════════

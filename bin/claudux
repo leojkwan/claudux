@@ -324,39 +324,11 @@ main() {
             fi
             ;;
         "status")
+            check_function "show_header"
+            check_function "claudux_status"
             show_header
             echo ""
-            if [[ -f "$STATE_FILE" ]]; then
-                local state
-                state=$(load_claudux_state)
-                local last_sha last_run backend
-                if command -v jq >/dev/null 2>&1; then
-                    last_sha=$(echo "$state" | jq -r '.last_sha')
-                    last_run=$(echo "$state" | jq -r '.last_run')
-                    backend=$(echo "$state" | jq -r '.backend // "claude"')
-                else
-                    last_sha=$(echo "$state" | grep '"last_sha"' | sed 's/.*: *"\([^"]*\)".*/\1/')
-                    last_run=$(echo "$state" | grep '"last_run"' | sed 's/.*: *"\([^"]*\)".*/\1/')
-                    backend=$(echo "$state" | grep '"backend"' | sed 's/.*: *"\([^"]*\)".*/\1/')
-                fi
-                echo "Last documented: $last_run (sha: ${last_sha:0:7})"
-                echo "Backend: ${backend:-claude}"
-                echo ""
-                changed=$(claudux_diff_since_last 2>/dev/null) || changed=""
-                if [[ -z "$changed" ]]; then
-                    success "Docs are up to date."
-                else
-                    local count
-                    count=$(echo "$changed" | wc -l | tr -d ' ')
-                    warn "$count file(s) changed since last doc gen."
-                    echo ""
-                    echo "Stale files:"
-                    echo "$changed" | head -20
-                    [[ $(echo "$changed" | wc -l) -gt 20 ]] && echo "  ... and more"
-                fi
-            else
-                echo "No checkpoint found. Run 'claudux update' first."
-            fi
+            claudux_status
             ;;
         "serve"|"server"|"dev")
             check_function "show_header"

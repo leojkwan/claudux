@@ -288,7 +288,41 @@ TEST_DIR_UNTRACKED=$(mktemp -d /tmp/claudux-state-test-XXXXXX)
 assert_contains "untracked docs files_documented is []" "$(cat /tmp/claudux-state-t14)" '"files_documented": []'
 rm -rf "$TEST_DIR_UNTRACKED"
 
+# --- Test 15: load_claudux_state returns 2 when JSON is corrupt ---
+TEST_DIR_CORRUPT=$(mktemp -d)
+(
+    cd "$TEST_DIR_CORRUPT"
+    git init -q
+    STATE_FILE="$TEST_DIR_CORRUPT/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR_CORRUPT/.claudux-state.json"
+    echo "not valid json {{{" > "$STATE_FILE"
+    load_claudux_state >/dev/null 2>&1
+    echo "rc:$?"
+) > /tmp/claudux-state-t15 2>&1
+# jq is expected to be available in CI; if not, corrupt detection is best-effort
+if command -v jq >/dev/null 2>&1; then
+    assert_contains "load_claudux_state returns 2 on corrupt JSON" "$(cat /tmp/claudux-state-t15)" "rc:2"
+else
+    echo "  SKIP load_claudux_state corrupt detection (jq not installed)"
+fi
+rm -rf "$TEST_DIR_CORRUPT"
+
+# --- Test 16: load_claudux_state returns 1 when file missing ---
+TEST_DIR_MISSING=$(mktemp -d)
+(
+    cd "$TEST_DIR_MISSING"
+    git init -q
+    STATE_FILE="$TEST_DIR_MISSING/.claudux-state-nope.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR_MISSING/.claudux-state-nope.json"
+    load_claudux_state >/dev/null 2>&1
+    echo "rc:$?"
+) > /tmp/claudux-state-t16 2>&1
+assert_contains "load_claudux_state returns 1 when missing" "$(cat /tmp/claudux-state-t16)" "rc:1"
+rm -rf "$TEST_DIR_MISSING"
+
 # Cleanup
-rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14}
+rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}
 
 test_summary

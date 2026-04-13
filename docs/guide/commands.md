@@ -80,9 +80,10 @@ claudux status
 ```
 
 Displays:
-- Last generation timestamp and commit SHA
+- Last generation timestamp and checkpoint commit SHA
 - Backend used (Claude or Codex)
-- Number of stale files since last run
+- Documented file count
+- Commits behind HEAD (if stale)
 
 ### `claudux validate`
 
