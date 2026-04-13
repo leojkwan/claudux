@@ -8,7 +8,14 @@ Claudux is a Bash-based CLI tool that leverages Claude AI to automatically gener
 
 - This is a developer-facing reference for the Claudux repository itself (architecture, patterns, and conventions).
 - It is not the `CLAUDE.md` that Claudux generates for your projects. That file is an AI instruction contract for a target repository.
-- Claudux does not read this file at runtime. It is safe to ignore if you are only using the tool.
+- When a target repo ships a `claudux.md` alongside its code, Claudux DOES read it at runtime and include it in the generation prompt (see `lib/docs-generation.sh`, around the `claudux_prefs` branch). Use this file to carry repo-specific documentation preferences.
+
+### Documentation preferences for this repo
+
+The generic prompt in `lib/docs-generation.sh` is project-agnostic and must stay that way. Claudux-specific documentation hints live here so they only apply when documenting Claudux itself:
+
+- Verbosity is enabled by default — do NOT document `-v`/`--verbose` flags or any `CLAUDUX_VERBOSE` environment configuration.
+- Default AI model is Sonnet (speed). If you mention model selection, note that users can force Opus via `FORCE_MODEL=opus claudux update` when a heavier model is warranted.
 
 ### How `CLAUDE.md` is actually used
 
