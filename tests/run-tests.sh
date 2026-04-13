@@ -164,8 +164,8 @@ done
 # ── 5. Help-to-CLI consistency ───────────────────────────────────────
 section "Help-to-CLI consistency"
 
-# Extract commands advertised in show_help (lines matching "./claudux <word>")
-advertised_cmds=$(echo "$help_output" | grep -oE '\./claudux [a-z]+' | awk '{print $2}' | sort -u)
+# Extract commands advertised in show_help (lines matching "claudux <word>")
+advertised_cmds=$(echo "$help_output" | grep -oE 'claudux [a-z]+' | awk '{print $2}' | sort -u)
 
 # Extract commands handled in main()'s case statement
 handled_cmds=$(grep -E '^\s+"[a-z]' "$REPO_ROOT/bin/claudux" | grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
@@ -227,13 +227,13 @@ section "Project detection"
     source "$REPO_ROOT/lib/project.sh"
 
     # Test in repo root (has package.json → should detect javascript)
-    cd "$REPO_ROOT"
+    cd "$REPO_ROOT" || exit 1
     result=$(detect_project_type)
     echo "CLAUDUX_TYPE=$result"
 
     # Test with a fake iOS project
     tmp=$(mktemp -d)
-    cd "$tmp"
+    cd "$tmp" || exit 1
     mkdir -p Test.xcodeproj
     result=$(detect_project_type)
     echo "IOS_TYPE=$result"
@@ -241,7 +241,7 @@ section "Project detection"
 
     # Test with a fake Python project
     tmp=$(mktemp -d)
-    cd "$tmp"
+    cd "$tmp" || exit 1
     touch requirements.txt
     result=$(detect_project_type)
     echo "PY_TYPE=$result"
@@ -249,7 +249,7 @@ section "Project detection"
 
     # Test with a fake Go project
     tmp=$(mktemp -d)
-    cd "$tmp"
+    cd "$tmp" || exit 1
     touch go.mod
     result=$(detect_project_type)
     echo "GO_TYPE=$result"
@@ -257,7 +257,7 @@ section "Project detection"
 
     # Test with empty dir (generic)
     tmp=$(mktemp -d)
-    cd "$tmp"
+    cd "$tmp" || exit 1
     result=$(detect_project_type)
     echo "EMPTY_TYPE=$result"
     rm -rf "$tmp"
@@ -367,6 +367,15 @@ if grep -qi "claude" "$readme"; then
 else
     fail "README should mention Claude CLI"
 fi
+
+# README Commands section should list all CLI subcommands from help
+for cmd in update serve diff status validate check template recreate; do
+    if grep -q "claudux $cmd" "$readme"; then
+        pass "README documents '$cmd' command"
+    else
+        fail "README missing '$cmd' command"
+    fi
+done
 
 # ── Summary ──────────────────────────────────────────────────────────
 echo ""

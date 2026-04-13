@@ -101,7 +101,10 @@ claudux                 # Interactive menu
 claudux update          # Generate/update docs
 claudux update -m "..." # Update with specific focus
 claudux serve           # Start dev server
-claudux check           # Verify environment (Node, Claude CLI)
+claudux diff            # Files changed since last doc gen
+claudux status          # Documentation freshness
+claudux validate        # Check internal links
+claudux check           # Verify environment (Node, CLI, docs)
 claudux template        # Generate claudux.md preferences
 claudux recreate        # Delete docs and start over
 claudux --version       # Show installed version
