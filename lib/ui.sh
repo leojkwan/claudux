@@ -32,8 +32,9 @@ create_claudux_md() {
     # No interactive preference capture; generation is fully automatic
     
     # Get model settings
+    # shellcheck disable=SC2034 # timeout_msg/cost_estimate destructured for future use
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
-    
+
     print_color "BLUE" "🧠 Analyzing $PROJECT_NAME to generate docs preferences..."
     echo ""
     
@@ -93,7 +94,8 @@ OUTPUT:
     local claude_exit_code=$?
     
     if [[ $claude_exit_code -eq 0 ]] && [[ -f "claudux.md" ]]; then
-        local line_count=$(wc -l < claudux.md)
+        local line_count
+        line_count=$(wc -l < claudux.md)
         print_color "GREEN" "✅ Generated claudux.md (docs preferences) ($line_count lines)"
         echo ""
         echo "💡 Next steps:"
@@ -107,6 +109,7 @@ OUTPUT:
 }
 
 # Validate links in documentation
+# shellcheck disable=SC2120 # called with args from bin/claudux, without from show_menu
 validate_links() {
     info "🔍 Running link validation..."
     echo ""
@@ -139,7 +142,8 @@ validate_links() {
     fi
     
     # Run validation script; also capture machine-readable list when failing
-    local missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
+    local missing_tmp
+    missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
     rm -f "$missing_tmp" 2>/dev/null || true
     "$LIB_DIR/validate-links.sh"
     local exit_code=$?
@@ -155,7 +159,8 @@ validate_links() {
     else
         warn "⚠️  Some links are broken."
         if $auto_fix && [[ -s "$missing_tmp" ]]; then
-            local file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
+            local file_list
+            file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
             info "🛠️  Auto-fixing by asking Claude to create: $file_list"
             local fix_msg="Create the following missing documentation files with correct frontmatter and minimal but accurate content; update navigation accordingly. Ensure config.ts links are valid. Missing files: ${file_list}. ${user_message}"
             CLAUDUX_AUTOFIXED=1 update -m "$fix_msg"
