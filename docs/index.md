@@ -20,7 +20,7 @@ features:
   
   - icon: 🧠
     title: Actually Understands
-    details: Analyzes structure, patterns, and context using Claude AI to generate meaningful documentation.
+    details: Analyzes structure, patterns, and context using AI to generate meaningful documentation. Supports Claude and Codex backends.
   
   - icon: ⚡
     title: Ships Fast  
@@ -75,19 +75,31 @@ Claudux uses a **two-phase flow** to produce reliable docs:
 | Command | Purpose |
 |---------|---------|
 | `claudux` | Interactive menu (adapts to project state) |
-| `claudux update` | Generate/update docs (includes cleanup & validation) |
-| `claudux update -m "..."` | Update with a focused directive for Claude |
+| `claudux update` | Generate/update docs (includes cleanup and validation) |
+| `claudux update -m "..."` | Update with a focused directive |
 | `claudux serve` | Start dev server at localhost:5173 |
 | `claudux recreate` | Start fresh (delete all docs) |
+| `claudux check` | Environment diagnostics |
 | `claudux template` | Generate claudux.md (docs preferences) |
-| `claudux check` | Verify environment (Node, Claude CLI, docs) |
 | `claudux --version` | Show installed version |
 | `claudux --help` | Show help and usage |
 
+## Multi-Backend Support
+
+claudux supports multiple AI backends. Claude is the default; Codex is available as an alternative via the `CLAUDUX_BACKEND` environment variable.
+
+```bash
+# Default -- uses Claude
+claudux update
+
+# Use Codex instead
+CLAUDUX_BACKEND=codex claudux update
+```
+
 ## Requirements
 
-- Node.js ≥ 18
-- Claude CLI installed and authenticated (`claude config get`)
+- Node.js >= 18
+- An authenticated AI CLI: [Claude CLI](https://docs.anthropic.com/claude/docs/claude-cli) (default) or [Codex CLI](https://github.com/openai/codex)
 
 ---
 
