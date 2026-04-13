@@ -100,6 +100,72 @@ assert_not_contains "codex header does NOT say Claude AI" \
     "$(cat /tmp/claudux-test-header-codex)" \
     "Powered by Claude AI"
 
+# --- Test 13: Claude-specific model lookup lives inside run_claude_once ---
+# Regression guard for the dog-food finding that CLAUDUX_BACKEND=codex printed
+# "🧠 Model: Claude Sonnet" before the router handed off to run_codex_once.
+# The call to get_model_settings (Claude-only helper) must not appear in the
+# pre-router body of update().
+update_fn=$(sed -n '/^update()/,/^}/p' "$LIB_DIR/docs-generation.sh")
+update_body_before_claude_once=$(sed -n '/^update()/,/^    run_claude_once()/p' "$LIB_DIR/docs-generation.sh")
+assert_not_contains "get_model_settings not called before run_claude_once" \
+    "$update_body_before_claude_once" \
+    'get_model_settings'
+assert_contains "run_claude_once body calls get_model_settings" \
+    "$update_fn" \
+    'get_model_settings'
+
+# --- Test 14: backend is resolved up-front in update() ---
+# The router reads "$backend" — that variable must be declared early in update()
+# so downstream helpers (cleanup, logging) can branch on it without set -u firing
+# or the codex path leaking a Claude label.
+first_backend_line=$(grep -n 'local backend=' "$LIB_DIR/docs-generation.sh" | head -1 | cut -d: -f1)
+first_backend_info_line=$(grep -n 'info "Backend:' "$LIB_DIR/docs-generation.sh" | head -1 | cut -d: -f1)
+assert_contains "backend variable is declared in docs-generation.sh" \
+    "$(grep 'local backend=' "$LIB_DIR/docs-generation.sh")" \
+    'CLAUDUX_BACKEND:-claude'
+# Numeric ordering: backend declaration appears before first "Backend:" info
+# print by treating the comparison result as a string "true"/"false".
+backend_before_info="false"
+if [[ -n "$first_backend_line" && -n "$first_backend_info_line" ]] && [[ "$first_backend_line" -lt "$first_backend_info_line" ]]; then
+    backend_before_info="true"
+fi
+assert_eq "backend declared before first Backend: info print" "true" "$backend_before_info"
+
+# --- Test 15: Claude --help probe is NOT run on the codex path ---
+# Regression guard for the dog-food finding that `claude --help | grep output-format`
+# ran unconditionally, triggering Claude CLI even when backend=codex.
+# The probe must live inside run_claude_once() only.
+run_claude_body=$(sed -n '/^    run_claude_once()/,/^    }/p' "$LIB_DIR/docs-generation.sh")
+run_codex_body=$(sed -n '/^    run_codex_once()/,/^    }/p' "$LIB_DIR/docs-generation.sh")
+assert_contains "claude --help probe is inside run_claude_once" \
+    "$run_claude_body" \
+    'claude --help'
+assert_not_contains "claude --help probe is NOT in run_codex_once" \
+    "$run_codex_body" \
+    'claude --help'
+# And the hoisted streaming-mode info line is also Claude-scoped now.
+assert_contains "Streaming mode info lives inside run_claude_once" \
+    "$run_claude_body" \
+    'Streaming mode enabled'
+
+# --- Test 16: prompt-built success message is not double-emojied ---
+# Regression guard for the dog-food finding of "✅ ✅ Prompt built". The
+# success() helper prepends ✅, so the message string must not also start with ✅.
+prompt_built_line=$(grep 'Prompt built successfully' "$LIB_DIR/docs-generation.sh" | grep 'success')
+assert_not_contains "success() call for Prompt built does NOT hardcode ✅" \
+    "$prompt_built_line" \
+    'success "✅'
+
+# --- Test 17: failure log labels the correct backend ---
+# Regression guard for "❌ Claude CLI exited" printed when codex failed.
+fail_block=$(sed -n '/# Log backend invocation result/,/^    fi$/p' "$LIB_DIR/docs-generation.sh")
+assert_contains "failure label is backend-aware" \
+    "$fail_block" \
+    'Codex CLI'
+assert_contains "failure label still handles claude backend" \
+    "$fail_block" \
+    'Claude CLI'
+
 # Cleanup
 rm -f /tmp/claudux-test-backend-default /tmp/claudux-test-backend-codex /tmp/claudux-test-missing
 rm -f /tmp/claudux-test-header-claude /tmp/claudux-test-header-codex

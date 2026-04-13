@@ -415,22 +415,20 @@ update() {
                 ;;
         esac
     done
+    # Resolve backend up-front so subsequent prints stay accurate.
+    local backend="${CLAUDUX_BACKEND:-claude}"
+
     info "📊 Starting documentation update and cleanup..."
     echo ""
-    
+
     # Show current git status
     show_git_status
     echo ""
-    
+
     # First, clean up obsolete files (handled within generation)
     cleanup_docs_silent
 
-    # Get model settings
-    # shellcheck disable=SC2034 # timeout_msg/cost_estimate destructured for future use
-    IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
-
     info "🚀 Generating documentation..."
-    info "🧠 Model: $model_name"
 
     # Start progress indicator (shorter initial delay for quicker feedback)
     local progress_pid
@@ -481,7 +479,7 @@ $prompt"
         warn "   Working directory: $(pwd)"
         error_exit "Cannot continue without a valid prompt"
     else
-        success "✅ Prompt built successfully (${#prompt} chars)"
+        success "Prompt built successfully (${#prompt} chars)"
     fi
     
     # Run Claude
@@ -507,29 +505,34 @@ $prompt"
     trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null" EXIT
     
     echo "$prompt" > "$prompt_file"
-    
-    # Run Claude with real-time streaming output
+
     local claude_exit_code=0
-    
-    # Check if --output-format flag is supported
-    local output_format_flag=""
-    if claude --help 2>&1 | grep -q "output-format"; then
-        output_format_flag="--output-format stream-json"
-        info "🔄 Streaming mode enabled for real-time progress"
-    fi
-    # Choose formatter based on output mode support
-    local formatter="format_claude_output"
-    if [[ -n "$output_format_flag" ]]; then
-        formatter="format_claude_output_stream"
-    fi
-    
-    # Always be verbose when streaming JSON
-    local verbose_flag="--verbose"
-    
-    # Function: run Claude once and stream output; return exit code
+
+    # Function: run Claude once and stream output; return exit code.
+    # All Claude-specific setup (model settings, output-format probe, formatter,
+    # verbose flag) is scoped here so the codex path never triggers Claude CLI.
     run_claude_once() {
         local started=false
         : > "$claude_log"
+
+        local model model_name timeout_msg cost_estimate
+        # shellcheck disable=SC2034 # timeout_msg/cost_estimate destructured for future use
+        IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
+        info "🧠 Model: $model_name"
+
+        # Check if --output-format flag is supported
+        local output_format_flag=""
+        if claude --help 2>&1 | grep -q "output-format"; then
+            output_format_flag="--output-format stream-json"
+            info "🔄 Streaming mode enabled for real-time progress"
+        fi
+        local formatter="format_claude_output"
+        if [[ -n "$output_format_flag" ]]; then
+            formatter="format_claude_output_stream"
+        fi
+
+        # Always be verbose when streaming JSON
+        local verbose_flag="--verbose"
 
         if command -v stdbuf &> /dev/null; then
             ( stdbuf -o0 -e0 claude \
@@ -610,7 +613,6 @@ $prompt"
     }
 
     # Launch generation — route based on CLAUDUX_BACKEND
-    local backend="${CLAUDUX_BACKEND:-claude}"
     claude_exit_code=1
     if [[ "$backend" == "codex" ]]; then
         info "Backend: Codex"
@@ -623,11 +625,13 @@ $prompt"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    # Log Claude invocation result
+    # Log backend invocation result
     if [[ $claude_exit_code -ne 0 ]]; then
-        warn "❌ Claude CLI exited with code: $claude_exit_code"
+        local backend_label="Claude CLI"
+        [[ "$backend" == "codex" ]] && backend_label="Codex CLI"
+        warn "❌ $backend_label exited with code: $claude_exit_code"
         if [[ -f "$claude_log" ]]; then
-            warn "📋 Last output from Claude:"
+            warn "📋 Last output from $backend_label:"
             tail -20 "$claude_log" | sed 's/^/   /'
         fi
     fi
