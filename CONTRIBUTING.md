@@ -37,17 +37,18 @@ assets/              Static assets (hero image, etc.)
 
 ### Release process
 
-1. Bump `version` in `package.json`
-2. Commit: `git commit -m "Bump to X.Y.Z"`
-3. Tag: `git tag vX.Y.Z`
-4. Push: `git push origin main --tags`
-5. The `docs.yml` workflow deploys the VitePress site to GitHub Pages on push to main
+1. Bump `version` in `package.json` and `package-lock.json`
+2. Update `CHANGELOG.md` with the new version's changes
+3. Commit: `git commit -m "release: vX.Y.Z"`
+4. Tag: `git tag vX.Y.Z`
+5. Push: `git push origin main --tags`
 
-npm publish is manual for now:
-```bash
-npm login
-npm publish
-```
+What happens automatically:
+- `ci.yml` runs lint, structure, syntax, version, and test jobs on every push/PR
+- `publish.yml` triggers on `v*` tags, runs the full CI suite, verifies the tag matches `package.json`, and publishes to npm with provenance
+- `docs.yml` deploys the VitePress site to GitHub Pages on push to main
+
+**Prerequisite:** The `NPM_TOKEN` repository secret must be configured in GitHub repo settings before the first tag publish. Generate a token at [npmjs.com/settings/tokens](https://www.npmjs.com/settings/~/tokens) (use "Automation" type).
 
 ### Learn more
 
@@ -58,10 +59,25 @@ By contributing, you agree to the MIT license.
 
 ## Publishing to npm (maintainers only)
 
+Publishing is automated via GitHub Actions. To release:
+
+```bash
+# 1. Ensure version is bumped in package.json + package-lock.json
+# 2. Ensure CHANGELOG.md is updated
+# 3. Tag and push
+git tag v1.2.0
+git push origin main --tags
+```
+
+The `publish.yml` workflow will:
+1. Run the full CI suite (lint, structure, syntax, version, 183 tests)
+2. Verify the git tag matches `package.json` version
+3. Publish to npm with `--provenance --access public`
+
+For manual publish (fallback):
 ```bash
 npm login
-npm version patch   # or: minor | major
 npm publish --access public
 ```
 
-Package name: `claudux`. Requires Node 18+.
+Package name: `claudux`. Requires Node 18+. Requires `NPM_TOKEN` secret in repo settings.
