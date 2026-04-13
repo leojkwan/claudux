@@ -177,15 +177,19 @@ show_help() {
     echo "• Everything runs locally - no data leaves your machine"
     echo "• Press Ctrl+C anytime to cancel"
     echo ""
-    echo "🔧 Command line usage:"
-    echo "  ./claudux                - Show interactive menu"
-    echo "  ./claudux update         - Update docs (includes cleanup and validation)"
-    echo "  ./claudux update -m \"message\""
-    echo "                         - Update with a focused directive for Claude"
-    echo "  ./claudux serve          - Start docs server (localhost:5173)"
-    echo "  ./claudux recreate       - Start fresh (delete all docs)"
-    echo "  ./claudux template       - Generate claudux.md (docs preferences)"
-    echo "  ./claudux help           - Show this help"
+    echo "Commands:"
+    echo "  claudux                  - Show interactive menu"
+    echo "  claudux update           - Update docs (includes cleanup and validation)"
+    echo "  claudux update -m \"msg\"  - Update with a focused directive for Claude"
+    echo "  claudux serve            - Start docs server (localhost:5173)"
+    echo "  claudux recreate         - Start fresh (delete all docs)"
+    echo "  claudux diff             - Show files changed since last doc gen"
+    echo "  claudux status           - Show documentation freshness"
+    echo "  claudux validate         - Validate all internal doc links"
+    echo "  claudux template         - Generate claudux.md (docs preferences)"
+    echo "  claudux check            - Environment diagnostics (Node, Claude, docs/)"
+    echo "  claudux help             - Show this help"
+    echo "  claudux --version        - Print version"
     echo ""
     echo "Options:"
     echo "  --with, -m               - Provide a high-level directive to guide generation"
@@ -269,6 +273,9 @@ show_menu() {
         select choice in \
             "Update docs                (regenerate from code)" \
             "Update (focused)           (enter directive → update)" \
+            "Diff                       (files changed since last gen)" \
+            "Status                     (documentation freshness)" \
+            "Validate links             (check for broken links)" \
             "Serve                      (vitepress dev server)" \
             "Create claudux.md           (docs preferences)" \
             "Recreate                   (start fresh)" \
@@ -288,6 +295,31 @@ show_menu() {
                     else
                         warn "No directive entered; cancelled."
                     fi
+                    break
+                    ;;
+                "Diff                       (files changed since last gen)")
+                    echo ""
+                    if changed=$(claudux_diff_since_last); then
+                        if [[ -z "$changed" ]]; then
+                            success "No files changed since last checkpoint."
+                        else
+                            echo "$changed"
+                            local count
+                            count=$(echo "$changed" | wc -l | tr -d ' ')
+                            echo ""
+                            echo "$count file(s) changed. Run 'claudux update' to regenerate docs."
+                        fi
+                    fi
+                    break
+                    ;;
+                "Status                     (documentation freshness)")
+                    echo ""
+                    claudux_status
+                    break
+                    ;;
+                "Validate links             (check for broken links)")
+                    echo ""
+                    validate_links
                     break
                     ;;
                 "Serve                      (vitepress dev server)")
