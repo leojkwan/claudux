@@ -12,7 +12,7 @@ lib/
   project.sh           # Project detection (type, name) from claudux.json or file heuristics
   content-protection.sh # Skip-marker parsing for sensitive content
   claude-utils.sh      # Claude CLI adapter — model selection, prompt dispatch, output parsing
-  codex-utils.sh       # Codex CLI adapter (added by multi-backend feature, PRs #3/#5)
+  codex-utils.sh       # Codex CLI adapter (loaded when CLAUDUX_BACKEND=codex)
   git-utils.sh         # Git status, change tracking, diff helpers
   docs-generation.sh   # Two-phase pipeline: prompt building + doc writing + link validation
   cleanup.sh           # AI-powered obsolete-doc detection and removal
@@ -90,14 +90,24 @@ This section will not be documented.
 - Zero runtime npm dependencies -- the `dependencies` field in `package.json` is empty.
 - No `eval` or dynamic code execution.
 - No secrets stored or transmitted -- authentication is delegated to the backend CLI.
-- See SECURITY.md (shipping in PR #9) for the full threat model and disclosure policy.
+- See [SECURITY.md](./SECURITY.md) for the full threat model and disclosure policy.
 
 ## Testing
 
-Tests are pure bash scripts with zero external dependencies. They cover file structure, library syntax, CLI behavior, help consistency, and project detection. The test suite (67 tests) and CI workflows are shipping in PRs #8 and #13. Run them with:
+Tests are pure bash scripts with zero external dependencies. The suite covers:
+
+- File structure and library syntax
+- CLI behavior, help consistency, and project detection
+- Backend routing (Claude and Codex)
+- State file write/read cycles and JSON validity
+- Diff calculation and change tracking
+- Edge cases: corrupted state, special characters, concurrent locks, non-git repos
+
+Run the full suite (183 tests across 8 files):
 
 ```bash
-bash tests/run-tests.sh
+bash tests/run-all.sh     # all suites
+bash tests/run-tests.sh   # core tests (63)
 ```
 
 CI runs ShellCheck linting, bash syntax checks, file structure validation, and the full test suite on every PR.

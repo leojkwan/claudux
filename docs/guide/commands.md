@@ -59,6 +59,41 @@ claudux template
 
 Creates a preferences file that guides future documentation generation based on your project's specific patterns and conventions.
 
+## Change Tracking Commands
+
+### `claudux diff`
+
+Show files that have changed since the last documentation generation.
+
+```bash
+claudux diff
+```
+
+Compares the current HEAD against the checkpoint SHA stored in `.claudux-state.json`. Lists all modified, added, or deleted files that may need doc updates.
+
+### `claudux status`
+
+Show documentation freshness and last generation details.
+
+```bash
+claudux status
+```
+
+Displays:
+- Last generation timestamp and commit SHA
+- Backend used (Claude or Codex)
+- Number of stale files since last run
+
+### `claudux validate`
+
+Run link validation on the generated documentation.
+
+```bash
+claudux validate
+```
+
+Checks all internal links in VitePress config and markdown files. Reports broken links without re-generating docs.
+
 ## Utility Commands
 
 ### `claudux check`
@@ -70,8 +105,9 @@ claudux check
 ```
 
 Checks:
-- Node.js version (≥18 required)
-- Claude CLI installation and authentication  
+- Node.js version (>=18 required)
+- Active backend (Claude or Codex)
+- Backend CLI installation and authentication
 - Documentation directory status
 
 ### `claudux --help`
@@ -105,17 +141,39 @@ claudux
 The menu adapts based on whether documentation already exists:
 
 **First run (no docs):**
-- Generate docs (scan code → markdown)
-- Serve (VitePress dev server) 
+- Generate docs (scan code -> markdown)
+- Serve (VitePress dev server)
 - Create claudux.md (docs preferences)
 
 **Existing docs:**
 - Update docs (regenerate from code)
-- Update (focused) (enter directive → update)
+- Update (focused) (enter directive -> update)
+- Diff (files changed since last gen)
+- Status (documentation freshness)
+- Validate links (check for broken links)
 - Serve (VitePress dev server)
+- Create claudux.md (docs preferences)
 - Recreate (start fresh)
 
 ## Advanced Usage
+
+### Backend Selection
+
+Switch between AI backends using environment variables:
+
+```bash
+# Default -- uses Claude
+claudux update
+
+# Use Codex (GPT-5.4) instead
+CLAUDUX_BACKEND=codex claudux update
+
+# Or export for the session
+export CLAUDUX_BACKEND=codex
+export CODEX_MODEL=gpt-5.4            # default
+export CODEX_REASONING_EFFORT=xhigh   # default
+claudux update
+```
 
 ### Environment Variables
 
