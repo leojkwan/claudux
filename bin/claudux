@@ -24,7 +24,8 @@ resolve_script_path() {
     local count=0
     
     while [[ -L "$source" ]] && [[ $count -lt 10 ]]; do
-        local dir="$(cd -P "$(dirname "$source")" 2>/dev/null && pwd)"
+        local dir
+        dir="$(cd -P "$(dirname "$source")" 2>/dev/null && pwd)"
         if [[ -z "$dir" ]]; then
             echo "ERROR: Could not resolve directory for: $source" >&2
             return 1
@@ -61,7 +62,7 @@ export SCRIPT_DIR
 export WORKING_DIR
 
 # Always work from the directory where the user called the script
-cd "$WORKING_DIR"
+cd "$WORKING_DIR" || exit 1
 
 # Check if we're in a git repository and auto-cd to project root
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -74,7 +75,7 @@ fi
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [[ "$PWD" != "$PROJECT_ROOT" ]]; then
     echo "📍 Changing to project root: $PROJECT_ROOT"
-    cd "$PROJECT_ROOT"
+    cd "$PROJECT_ROOT" || exit 1
 fi
 
 # Determine lib directory location
@@ -94,6 +95,7 @@ for lib in "${REQUIRED_LIBS[@]}"; do
         echo "ERROR: Required library file not found: $lib_path" >&2
         exit 1
     fi
+    # shellcheck source=/dev/null
     if ! source "$lib_path"; then
         echo "ERROR: Failed to source library: $lib_path" >&2
         exit 1
@@ -106,6 +108,7 @@ done
 if [[ "${CLAUDUX_BACKEND:-}" == "codex" ]]; then
     codex_lib="$LIB_DIR/codex-utils.sh"
     if [[ -f "$codex_lib" ]]; then
+        # shellcheck source=/dev/null
         source "$codex_lib"
     else
         CODEX_UTILS_MISSING=true
@@ -123,7 +126,8 @@ check_function() {
 
 # Implement file locking for concurrent execution safety
 acquire_lock() {
-    local lock_file="${TMPDIR:-/tmp}/claudux-$(pwd | md5sum 2>/dev/null | cut -d' ' -f1 || pwd | md5 | awk '{print $NF}').lock"
+    local lock_file
+    lock_file="${TMPDIR:-/tmp}/claudux-$(pwd | md5sum 2>/dev/null | cut -d' ' -f1 || pwd | md5 | awk '{print $NF}').lock"
     local lock_pid
     
     # Check if lock file exists and if the process is still running
@@ -143,6 +147,7 @@ acquire_lock() {
     echo $$ > "$lock_file"
     
     # Set up cleanup on exit
+    # shellcheck disable=SC2064
     trap "rm -f '$lock_file' 2>/dev/null" EXIT
     
     return 0
@@ -159,7 +164,8 @@ validate_dependencies() {
         has_errors=true
     else
         # Check Node version (require v18+)
-        local node_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+        local node_version
+        node_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
         if [[ -n "$node_version" ]] && [[ "$node_version" -lt 18 ]]; then
             echo "ERROR: Node.js v18+ is required (found v$node_version)" >&2
             has_errors=true

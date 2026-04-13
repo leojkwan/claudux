@@ -309,8 +309,8 @@ VITEPRESS CONFIGURATION BEST PRACTICES:
 PROJECT-SPECIFIC FLEXIBILITY:
   - Adapt documentation structure to the project's needs (not all projects need all sections)
   - Small libraries may only need API reference; large apps may need architecture docs
-  - Use appropriate section names for the domain (e.g., "Recipes" for a cookbook app)
-  - Include project-specific sections that make sense (e.g., "Security" for auth libraries)
+  - Use appropriate section names for the domain (e.g., Recipes for a cookbook app)
+  - Include project-specific sections that make sense (e.g., Security for auth libraries)
 
 Output your complete analysis and plan, then proceed to Phase 2.
 
@@ -407,13 +407,15 @@ update() {
     cleanup_docs_silent
 
     # Get model settings
+    # shellcheck disable=SC2034 # timeout_msg/cost_estimate destructured for future use
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
 
     info "🚀 Generating documentation..."
     info "🧠 Model: $model_name"
 
     # Start progress indicator (shorter initial delay for quicker feedback)
-    local progress_pid=$(show_progress 8 24)
+    local progress_pid
+    progress_pid=$(show_progress 8 24)
     
     # Build the prompt
     info "📝 Building prompt for $PROJECT_TYPE project..."
@@ -425,7 +427,8 @@ update() {
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
-    local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
+    local prompt
+    prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
 
     # Incremental mode: if a checkpoint exists, scope the update to changed files
     if [[ -f "$STATE_FILE" ]]; then
@@ -466,8 +469,10 @@ $prompt"
     
     # Save prompt for debugging
     # Create unique temp files for this session
-    local prompt_file=$(mktemp /tmp/claudux-prompt-XXXXXX || mktemp)
-    local claude_log=$(mktemp /tmp/claudux-claude-XXXXXX || mktemp)
+    local prompt_file
+    prompt_file=$(mktemp /tmp/claudux-prompt-XXXXXX || mktemp)
+    local claude_log
+    claude_log=$(mktemp /tmp/claudux-claude-XXXXXX || mktemp)
     
     # Ensure we got valid temp files
     if [[ -z "$prompt_file" ]] || [[ -z "$claude_log" ]]; then
@@ -475,6 +480,7 @@ $prompt"
     fi
     
     # Clean up temp files on exit
+    # shellcheck disable=SC2064
     trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null" EXIT
     
     echo "$prompt" > "$prompt_file"
@@ -551,6 +557,7 @@ $prompt"
         local started=false
         : > "$claude_log"
 
+        # shellcheck disable=SC2034 # codex_model/codex_timeout_msg/codex_effort destructured for future use
         IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
         info "Model: $codex_model_name"
 
@@ -640,13 +647,15 @@ $prompt"
                 # Attempt a single auto-fix pass: collect missing files and re-run with a focused directive
                 if [[ -z "$already_autofixed" ]]; then
                     # Re-run validator to collect machine-readable list
-                    local missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
+                    local missing_tmp
+                    missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
                     rm -f "$missing_tmp" 2>/dev/null || true
                     if "$LIB_DIR/validate-links.sh" --output "$missing_tmp" >/dev/null 2>&1; then
                         : # no-op; shouldn't happen because prior run failed
                     fi
                     if [[ -s "$missing_tmp" ]]; then
-                        local file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
+                        local file_list
+                        file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
                         warn "🛠️  Auto-fix: asking Claude to create missing pages: $file_list"
                         echo ""
 
