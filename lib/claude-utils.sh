@@ -140,7 +140,6 @@ format_claude_output_stream() {
     local verbose_level=1
     local line
     local delta_preview_chars=180
-    local current_phase=1
     local printed_phase1=0
     local printed_phase2=0
     local reads=0
@@ -223,7 +222,6 @@ format_claude_output_stream() {
                 echo ""
                 print_color "CYAN" "━━━ Phase 2: Documentation Generation ━━━"
                 printed_phase2=1
-                current_phase=2
             fi
 
             # Emit per-action logs and counts
@@ -333,7 +331,6 @@ format_claude_output_stream() {
                     echo ""
                     print_color "CYAN" "━━━ Phase 2: Documentation Generation ━━━"
                     printed_phase2=1
-                    current_phase=2
                     # Suppress the raw markdown phase header if that's what this line is
                     if echo "$upper" | grep -qE '^\s*#{0,6}\s*PHASE\s*2\b|====\s*PHASE\s*2\b|PHASE\s*2\s*:\s*EXECUTE\s*THE\s*PLAN'; then
                         continue

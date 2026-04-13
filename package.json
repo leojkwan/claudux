@@ -7,7 +7,9 @@
     "claudux": "./bin/claudux"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "bash tests/run-tests.sh",
+    "test:all": "bash tests/run-all.sh",
+    "lint": "shellcheck -s bash -S warning bin/claudux lib/*.sh"
   },
   "keywords": [
     "documentation",

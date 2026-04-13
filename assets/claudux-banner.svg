@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" fill="none">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #8b5cf6;
+      --accent-dim: #ede9fe;
+      --node-bg: #ffffff;
+      --node-border: #e2e8f0;
+      --arrow: #cbd5e1;
+      --green: #10b981;
+      --green-dim: #d1fae5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --accent: #a78bfa;
+        --accent-dim: #2e1065;
+        --node-bg: #1e293b;
+        --node-border: #334155;
+        --arrow: #475569;
+        --green: #34d399;
+        --green-dim: #064e3b;
+      }
+    }
+    .bg { fill: var(--bg); }
+    .text-primary { fill: var(--text-primary); }
+    .text-secondary { fill: var(--text-secondary); }
+    .text-muted { fill: var(--text-muted); }
+    .accent { fill: var(--accent); }
+    .accent-dim { fill: var(--accent-dim); }
+    .node-bg { fill: var(--node-bg); }
+    .node-border { stroke: var(--node-border); fill: none; }
+    .arrow-stroke { stroke: var(--arrow); fill: none; }
+    .arrow-fill { fill: var(--arrow); }
+    .accent-stroke { stroke: var(--accent); fill: none; }
+    .green { fill: var(--green); }
+    .green-dim { fill: var(--green-dim); }
+    .green-stroke { stroke: var(--green); fill: none; }
+
+    @keyframes flow {
+      0% { stroke-dashoffset: 24; }
+      100% { stroke-dashoffset: 0; }
+    }
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: flow 1.5s linear infinite;
+    }
+  </style>
+
+  <rect width="960" height="280" rx="12" class="bg"/>
+
+  <g class="text-muted" opacity="0.2">
+    <circle cx="40" cy="40" r="1"/><circle cx="80" cy="40" r="1"/><circle cx="120" cy="40" r="1"/>
+    <circle cx="840" cy="240" r="1"/><circle cx="880" cy="240" r="1"/><circle cx="920" cy="240" r="1"/>
+  </g>
+
+  <text x="480" y="70" text-anchor="middle" class="text-primary" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">claudux</text>
+  <text x="480" y="100" text-anchor="middle" class="text-secondary" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="400">Production-ready docs from your code.</text>
+
+  <g transform="translate(100, 140)">
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="140" height="52" rx="10" class="node-bg"/>
+      <rect x="0" y="0" width="140" height="52" rx="10" class="node-border" stroke-width="1.5"/>
+      <text x="70" y="22" text-anchor="middle" class="text-muted" font-family="system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="1">YOUR</text>
+      <text x="70" y="38" text-anchor="middle" class="text-primary" font-family="ui-monospace, monospace" font-size="13" font-weight="600">codebase</text>
+    </g>
+
+    <line x1="148" y1="26" x2="188" y2="26" class="arrow-stroke flow-line" stroke-width="1.5"/>
+    <polygon points="185,21 195,26 185,31" class="arrow-fill"/>
+
+    <g transform="translate(200, 0)">
+      <rect x="0" y="0" width="140" height="52" rx="10" class="accent-dim"/>
+      <rect x="0" y="0" width="140" height="52" rx="10" class="accent-stroke" stroke-width="1.5"/>
+      <text x="70" y="22" text-anchor="middle" class="text-muted" font-family="system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="1">PHASE 1</text>
+      <text x="70" y="38" text-anchor="middle" class="accent" font-family="ui-monospace, monospace" font-size="13" font-weight="700">plan</text>
+    </g>
+
+    <line x1="348" y1="26" x2="388" y2="26" class="accent-stroke flow-line" stroke-width="1.5"/>
+    <polygon points="385,21 395,26 385,31" class="accent"/>
+
+    <g transform="translate(400, 0)">
+      <rect x="0" y="0" width="140" height="52" rx="10" class="accent-dim"/>
+      <rect x="0" y="0" width="140" height="52" rx="10" class="accent-stroke" stroke-width="1.5"/>
+      <text x="70" y="22" text-anchor="middle" class="text-muted" font-family="system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="1">PHASE 2</text>
+      <text x="70" y="38" text-anchor="middle" class="accent" font-family="ui-monospace, monospace" font-size="13" font-weight="700">write</text>
+    </g>
+
+    <line x1="548" y1="26" x2="588" y2="26" class="green-stroke flow-line" stroke-width="1.5"/>
+    <polygon points="585,21 595,26 585,31" class="green"/>
+
+    <g transform="translate(600, 0)">
+      <rect x="0" y="0" width="160" height="52" rx="10" class="green-dim"/>
+      <rect x="0" y="0" width="160" height="52" rx="10" class="green-stroke" stroke-width="1.5"/>
+      <text x="80" y="22" text-anchor="middle" class="text-muted" font-family="system-ui, sans-serif" font-size="10" font-weight="500" letter-spacing="1">OUTPUT</text>
+      <text x="80" y="38" text-anchor="middle" class="green" font-family="ui-monospace, monospace" font-size="13" font-weight="700">VitePress site</text>
+    </g>
+  </g>
+
+  <text x="480" y="265" text-anchor="middle" class="text-muted" font-family="system-ui, -apple-system, sans-serif" font-size="11">One command. No templates. Always in sync with your code.</text>
+</svg>

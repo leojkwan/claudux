@@ -35,7 +35,8 @@ get_protection_markers() {
 # Strip protected content from a file
 strip_protected_content() {
     local file="$1"
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp)
     
     if [[ ! -f "$file" ]]; then
         echo "$file"
@@ -43,7 +44,8 @@ strip_protected_content() {
     fi
     
     # Get appropriate comment markers for this file type
-    local markers=($(get_protection_markers "$file"))
+    local markers
+    read -ra markers <<< "$(get_protection_markers "$file")"
     local start_marker="${markers[0]}"
     local end_marker="${markers[1]}"
     

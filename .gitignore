@@ -35,3 +35,13 @@ documents/.cursorrules
 .cursorrules
 documents/
 .npmrc
+
+# Secrets / environment
+.env
+.env.*
+*.key
+*.pem
+secrets/
+
+# claudux change tracking state (local per-dev)
+.claudux-state.json

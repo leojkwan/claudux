@@ -1,0 +1,44 @@
+name: Bug Report
+description: Report a problem with claudux.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: input
+    id: version
+    attributes:
+      label: claudux version
+      description: Run `claudux --version` and paste the output.
+      placeholder: "1.1.1"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What broke
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Include the command you ran, project type (React, Python, etc.), and any error output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: Run `node --version` and paste the output.
+      placeholder: "v20.11.0"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.3 / Ubuntu 24.04 / Windows 11"

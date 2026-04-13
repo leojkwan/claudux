@@ -1,6 +1,133 @@
 #!/bin/bash
 # Documentation generation and update functions
 
+STATE_FILE=".claudux-state.json"
+
+# Save a change-tracking checkpoint after successful doc generation.
+# Records HEAD SHA, timestamp, backend used, and which files were documented.
+save_claudux_state() {
+    local head_sha
+    head_sha=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local backend="${CLAUDUX_BACKEND:-claude}"
+
+    # Collect documented files (everything under docs/ tracked by git + untracked new)
+    local files_json="[]"
+    if command -v git >/dev/null 2>&1; then
+        local raw_files
+        raw_files=$(git ls-files docs/ 2>/dev/null | sort | while IFS= read -r f; do
+            # Escape backslashes and double-quotes for valid JSON strings
+            local escaped
+            escaped=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            printf '"%s",' "$escaped"
+        done | sed 's/,$//')
+        if [[ -n "$raw_files" ]]; then
+            files_json="[$raw_files]"
+        fi
+        # files_json stays "[]" when docs/ has no tracked files
+    fi
+
+    cat > "$STATE_FILE" <<EOJSON
+{
+  "last_sha": "$head_sha",
+  "last_run": "$timestamp",
+  "backend": "$backend",
+  "files_documented": $files_json
+}
+EOJSON
+    info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
+}
+
+# Load existing state file. Prints JSON to stdout. Returns 1 if no state.
+load_claudux_state() {
+    if [[ -f "$STATE_FILE" ]]; then
+        cat "$STATE_FILE"
+        return 0
+    fi
+    return 1
+}
+
+# Show what changed since last doc generation.
+# Outputs list of files that were modified since the last checkpoint SHA.
+claudux_diff_since_last() {
+    local state
+    if ! state=$(load_claudux_state); then
+        echo "No previous checkpoint — run 'claudux update' first."
+        return 1
+    fi
+
+    local last_sha
+    if command -v jq >/dev/null 2>&1; then
+        last_sha=$(echo "$state" | jq -r '.last_sha')
+    else
+        last_sha=$(echo "$state" | grep '"last_sha"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+    fi
+
+    if [[ -z "$last_sha" ]] || [[ "$last_sha" == "unknown" ]]; then
+        echo "Checkpoint SHA is unknown — cannot diff."
+        return 1
+    fi
+
+    # Check if the SHA still exists in history
+    if ! git cat-file -t "$last_sha" >/dev/null 2>&1; then
+        echo "Checkpoint SHA $last_sha no longer in history (rebase/force-push?). Full rescan needed."
+        return 1
+    fi
+
+    git diff --name-only "$last_sha"..HEAD 2>/dev/null
+}
+
+# Show documentation freshness report.
+# Reads .claudux-state.json and prints a human-readable summary.
+claudux_status() {
+    local state
+    if ! state=$(load_claudux_state); then
+        echo "No documentation checkpoint found."
+        echo ""
+        echo "Run 'claudux update' to generate docs and create a checkpoint."
+        return 1
+    fi
+
+    local last_sha last_run backend file_count
+    if command -v jq >/dev/null 2>&1; then
+        last_sha=$(echo "$state" | jq -r '.last_sha // "unknown"')
+        last_run=$(echo "$state" | jq -r '.last_run // "unknown"')
+        backend=$(echo "$state" | jq -r '.backend // "claude"')
+        file_count=$(echo "$state" | jq -r '.files_documented | length // 0')
+    else
+        last_sha=$(echo "$state" | grep '"last_sha"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        last_run=$(echo "$state" | grep '"last_run"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        backend=$(echo "$state" | grep '"backend"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        file_count="?"
+    fi
+
+    echo "Documentation status"
+    echo "--------------------"
+    echo "  Last generated: $last_run"
+    echo "  Checkpoint SHA: ${last_sha:0:12}"
+    echo "  Backend:        $backend"
+    echo "  Documented files: $file_count"
+
+    # Show how many commits behind
+    if [[ "$last_sha" != "unknown" ]] && git cat-file -t "$last_sha" >/dev/null 2>&1; then
+        local head_sha
+        head_sha=$(git rev-parse HEAD 2>/dev/null)
+        if [[ "$head_sha" == "$last_sha" ]]; then
+            echo ""
+            success "Docs are up to date with HEAD."
+        else
+            local commits_behind
+            commits_behind=$(git rev-list "$last_sha"..HEAD 2>/dev/null | wc -l | tr -d ' ')
+            echo ""
+            warn "Docs are $commits_behind commit(s) behind HEAD."
+            echo "  Run 'claudux diff' to see changed files."
+            echo "  Run 'claudux update' to regenerate."
+        fi
+    fi
+}
+
+
 # Build the comprehensive prompt for Claude
 build_generation_prompt() {
     local project_type="$1"
@@ -182,8 +309,8 @@ VITEPRESS CONFIGURATION BEST PRACTICES:
 PROJECT-SPECIFIC FLEXIBILITY:
   - Adapt documentation structure to the project's needs (not all projects need all sections)
   - Small libraries may only need API reference; large apps may need architecture docs
-  - Use appropriate section names for the domain (e.g., "Recipes" for a cookbook app)
-  - Include project-specific sections that make sense (e.g., "Security" for auth libraries)
+  - Use appropriate section names for the domain (e.g., Recipes for a cookbook app)
+  - Include project-specific sections that make sense (e.g., Security for auth libraries)
 
 Output your complete analysis and plan, then proceed to Phase 2.
 
@@ -280,13 +407,15 @@ update() {
     cleanup_docs_silent
 
     # Get model settings
+    # shellcheck disable=SC2034 # timeout_msg/cost_estimate destructured for future use
     IFS='|' read -r model model_name timeout_msg cost_estimate <<< "$(get_model_settings)"
 
     info "🚀 Generating documentation..."
     info "🧠 Model: $model_name"
 
     # Start progress indicator (shorter initial delay for quicker feedback)
-    local progress_pid=$(show_progress 8 24)
+    local progress_pid
+    progress_pid=$(show_progress 8 24)
     
     # Build the prompt
     info "📝 Building prompt for $PROJECT_TYPE project..."
@@ -298,8 +427,29 @@ update() {
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
-    local prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
-    
+    local prompt
+    prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
+
+    # Incremental mode: if a checkpoint exists, scope the update to changed files
+    if [[ -f "$STATE_FILE" ]]; then
+        local changed_files
+        changed_files=$(claudux_diff_since_last 2>/dev/null) || changed_files=""
+        if [[ -n "$changed_files" ]]; then
+            local count
+            count=$(echo "$changed_files" | wc -l | tr -d ' ')
+            info "Incremental mode: $count file(s) changed since last run"
+            local file_list
+            file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
+            prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.
+
+Changed files: $file_list
+
+$prompt"
+        else
+            info "No source changes since last run — running full scan"
+        fi
+    fi
+
     # Check if prompt was built successfully
     if [[ -z "$prompt" ]]; then
         warn "❌ Failed to build generation prompt"
@@ -319,8 +469,10 @@ update() {
     
     # Save prompt for debugging
     # Create unique temp files for this session
-    local prompt_file=$(mktemp /tmp/claudux-prompt-XXXXXX || mktemp)
-    local claude_log=$(mktemp /tmp/claudux-claude-XXXXXX || mktemp)
+    local prompt_file
+    prompt_file=$(mktemp /tmp/claudux-prompt-XXXXXX || mktemp)
+    local claude_log
+    claude_log=$(mktemp /tmp/claudux-claude-XXXXXX || mktemp)
     
     # Ensure we got valid temp files
     if [[ -z "$prompt_file" ]] || [[ -z "$claude_log" ]]; then
@@ -328,6 +480,7 @@ update() {
     fi
     
     # Clean up temp files on exit
+    # shellcheck disable=SC2064
     trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null" EXIT
     
     echo "$prompt" > "$prompt_file"
@@ -399,9 +552,49 @@ update() {
         return $ec
     }
 
-    # Launch generation once
+    # Function: run Codex once and stream output; return exit code
+    run_codex_once() {
+        local started=false
+        : > "$claude_log"
+
+        # shellcheck disable=SC2034 # codex_model/codex_timeout_msg/codex_effort destructured for future use
+        IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
+        info "Model: $codex_model_name"
+
+        ( run_codex_exec "$prompt" | tee "$claude_log" ) | format_codex_output_stream &
+        local stream_pid=$!
+
+        for _ in $(seq 1 30); do
+            if [[ -s "$claude_log" ]]; then
+                started=true
+                break
+            fi
+            sleep 1
+        done
+
+        if ! $started; then
+            warn "No visible progress after 30s"
+            kill "$stream_pid" 2>/dev/null || true
+            wait "$stream_pid" 2>/dev/null || true
+            return 124
+        fi
+
+        trap 'echo ""; warn "Interrupt received, stopping generation..."; kill -TERM ${stream_pid} 2>/dev/null || true; [[ -n "$progress_pid" ]] && kill $progress_pid 2>/dev/null || true; wait ${stream_pid} 2>/dev/null || true; exit 130' INT
+        wait ${stream_pid}
+        local ec=$?
+        trap - INT
+        return $ec
+    }
+
+    # Launch generation — route based on CLAUDUX_BACKEND
+    local backend="${CLAUDUX_BACKEND:-claude}"
     claude_exit_code=1
-    run_claude_once
+    if [[ "$backend" == "codex" ]]; then
+        info "Backend: Codex"
+        run_codex_once
+    else
+        run_claude_once
+    fi
     claude_exit_code=$?
     
     echo ""
@@ -454,13 +647,15 @@ update() {
                 # Attempt a single auto-fix pass: collect missing files and re-run with a focused directive
                 if [[ -z "$already_autofixed" ]]; then
                     # Re-run validator to collect machine-readable list
-                    local missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
+                    local missing_tmp
+                    missing_tmp=$(mktemp /tmp/claudux-missing-XXXXXX || mktemp)
                     rm -f "$missing_tmp" 2>/dev/null || true
                     if "$LIB_DIR/validate-links.sh" --output "$missing_tmp" >/dev/null 2>&1; then
                         : # no-op; shouldn't happen because prior run failed
                     fi
                     if [[ -s "$missing_tmp" ]]; then
-                        local file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
+                        local file_list
+                        file_list=$(sed 's#^docs/##' "$missing_tmp" | tr '\n' ' ')
                         warn "🛠️  Auto-fix: asking Claude to create missing pages: $file_list"
                         echo ""
 
@@ -489,7 +684,10 @@ update() {
         # Show detailed change summary
         info "📋 Step 4: Analyzing changes made..."
         show_detailed_changes
-        
+
+        # Save change tracking checkpoint
+        save_claudux_state
+
     else
         warn "Claude Code failed with exit code $claude_exit_code"
         echo ""

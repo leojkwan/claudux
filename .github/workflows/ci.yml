@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+jobs:
+  lint:
+    name: ShellCheck lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint bin/claudux
+        run: shellcheck -s bash -S warning bin/claudux
+
+      - name: Lint library scripts
+        run: |
+          for f in lib/*.sh; do
+            echo "--- shellcheck $f ---"
+            shellcheck -s bash -S warning "$f"
+          done
+
+  structure:
+    name: File structure checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required files exist
+        run: |
+          status=0
+          for f in bin/claudux lib/colors.sh lib/project.sh lib/claude-utils.sh \
+                   lib/docs-generation.sh lib/cleanup.sh lib/server.sh lib/ui.sh \
+                   lib/git-utils.sh lib/content-protection.sh lib/validate-links.sh \
+                   package.json README.md LICENSE; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING: $f"
+              status=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          exit $status
+
+      - name: bin/claudux is executable
+        run: test -x bin/claudux
+
+      - name: Library scripts are executable
+        run: |
+          status=0
+          for f in lib/*.sh; do
+            if [ ! -x "$f" ]; then
+              echo "NOT EXECUTABLE: $f"
+              status=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          exit $status
+
+  syntax:
+    name: Bash syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          status=0
+          for f in bin/claudux lib/*.sh; do
+            if ! bash -n "$f" 2>&1; then
+              echo "SYNTAX ERROR: $f"
+              status=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          exit $status
+
+  version:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: package.json has valid version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "package.json version: $version"
+          if [ -z "$version" ] || [ "$version" = "undefined" ]; then
+            echo "ERROR: No version found in package.json"
+            exit 1
+          fi
+
+      - name: --version flag returns version
+        run: |
+          pkg_version=$(node -p "require('./package.json').version")
+          cli_output=$(bash bin/claudux --version 2>&1 || true)
+          echo "CLI output: $cli_output"
+          if echo "$cli_output" | grep -q "$pkg_version"; then
+            echo "OK: version matches"
+          else
+            echo "MISMATCH: package.json=$pkg_version, CLI=$cli_output"
+            exit 1
+          fi

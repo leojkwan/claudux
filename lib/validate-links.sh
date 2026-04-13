@@ -33,13 +33,15 @@ check_duplicate_ids() {
     local duplicate_found=false
     
     # Extract all {#id} patterns from markdown files
-    local temp_ids=$(mktemp)
+    local temp_ids
+    temp_ids=$(mktemp)
     find docs -name "*.md" -type f -exec grep -H -o '{#[^}]*}' {} \; 2>/dev/null | \
         sed 's/{#\([^}]*\)}/\1/' > "$temp_ids" 2>/dev/null || true
     
     if [[ -s "$temp_ids" ]]; then
         # Check for duplicates
-        local duplicates=$(cut -d: -f2 "$temp_ids" | sort | uniq -d)
+        local duplicates
+        duplicates=$(cut -d: -f2 "$temp_ids" | sort | uniq -d)
         if [[ -n "$duplicates" ]]; then
             echo "❌ Duplicate heading IDs found:"
             while IFS= read -r duplicate_id; do

@@ -5,7 +5,8 @@
 show_git_status() {
     info "📋 Current repository status:"
     
-    local status_count=$(git status --porcelain 2>/dev/null | wc -l)
+    local status_count
+    status_count=$(git status --porcelain 2>/dev/null | wc -l)
     
     if [[ $status_count -eq 0 ]]; then
         echo "   Working directory clean"
@@ -23,8 +24,9 @@ show_git_status() {
 # Show detailed changes with semantic descriptions
 show_detailed_changes() {
     # Get list of changed files, filtering out non-documentation files
-    local changed_files=$(git status --porcelain docs/ 2>/dev/null | \
-        grep -v -E "(node_modules/|package-lock\.json|package\.json|\.vitepress/cache/|\.vitepress/dist/|\.vitepress/temp/)")
+    local changed_files
+    changed_files=$(git status --porcelain docs/ 2>/dev/null | \
+        grep -v -E "(node_modules/|package-lock\.json|package\.json|\.vitepress/cache/|\.vitepress/dist/|\.vitepress/temp/)") || true
     
     if [[ -z "$changed_files" ]]; then
         info "   📝 No documentation files were modified"
