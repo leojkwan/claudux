@@ -251,7 +251,7 @@ TEST_DIR=$(setup_repo)
     cd "$TEST_DIR"
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t12 2>&1
-assert_contains "status with no state shows instruction" "$(cat /tmp/claudux-integ-t12)" "No checkpoint found"
+assert_contains "status with no state shows instruction" "$(cat /tmp/claudux-integ-t12)" "No documentation checkpoint found"
 rm -rf "$TEST_DIR"
 
 # --- Test 13: claudux diff shows changed files after save + commit ---
@@ -287,7 +287,7 @@ TEST_DIR=$(setup_repo)
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t14 2>&1
 result14=$(cat /tmp/claudux-integ-t14)
-assert_contains "status CLI shows last documented" "$result14" "Last documented:"
+assert_contains "status CLI shows last generated" "$result14" "Last generated:"
 assert_contains "status CLI shows backend" "$result14" "Backend:"
 rm -rf "$TEST_DIR"
 
@@ -308,8 +308,8 @@ TEST_DIR=$(setup_repo)
     bash "$REPO_ROOT/bin/claudux" status 2>&1
 ) > /tmp/claudux-integ-t15 2>&1
 result15=$(cat /tmp/claudux-integ-t15)
-assert_contains "status shows stale file count" "$result15" "file(s) changed"
-assert_contains "status shows stale files" "$result15" "Stale files:"
+assert_contains "status shows stale commit count" "$result15" "commit(s) behind HEAD"
+assert_contains "status shows diff instruction" "$result15" "claudux diff"
 rm -rf "$TEST_DIR"
 
 # ═══════════════════════════════════════════

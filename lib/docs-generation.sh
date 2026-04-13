@@ -114,6 +114,55 @@ claudux_diff_since_last() {
     git diff --name-only "$last_sha"..HEAD 2>/dev/null
 }
 
+# Show documentation freshness report.
+# Reads .claudux-state.json and prints a human-readable summary.
+claudux_status() {
+    local state
+    if ! state=$(load_claudux_state); then
+        echo "No documentation checkpoint found."
+        echo ""
+        echo "Run 'claudux update' to generate docs and create a checkpoint."
+        return 1
+    fi
+
+    local last_sha last_run backend file_count
+    if command -v jq >/dev/null 2>&1; then
+        last_sha=$(echo "$state" | jq -r '.last_sha // "unknown"')
+        last_run=$(echo "$state" | jq -r '.last_run // "unknown"')
+        backend=$(echo "$state" | jq -r '.backend // "claude"')
+        file_count=$(echo "$state" | jq -r '.files_documented | length // 0')
+    else
+        last_sha=$(echo "$state" | grep '"last_sha"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        last_run=$(echo "$state" | grep '"last_run"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        backend=$(echo "$state" | grep '"backend"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+        file_count="?"
+    fi
+
+    echo "Documentation status"
+    echo "--------------------"
+    echo "  Last generated: $last_run"
+    echo "  Checkpoint SHA: ${last_sha:0:12}"
+    echo "  Backend:        $backend"
+    echo "  Documented files: $file_count"
+
+    # Show how many commits behind
+    if [[ "$last_sha" != "unknown" ]] && git cat-file -t "$last_sha" >/dev/null 2>&1; then
+        local head_sha
+        head_sha=$(git rev-parse HEAD 2>/dev/null)
+        if [[ "$head_sha" == "$last_sha" ]]; then
+            echo ""
+            success "Docs are up to date with HEAD."
+        else
+            local commits_behind
+            commits_behind=$(git rev-list "$last_sha"..HEAD 2>/dev/null | wc -l | tr -d ' ')
+            echo ""
+            warn "Docs are $commits_behind commit(s) behind HEAD."
+            echo "  Run 'claudux diff' to see changed files."
+            echo "  Run 'claudux update' to regenerate."
+        fi
+    fi
+}
+
 # Build the comprehensive prompt for Claude
 build_generation_prompt() {
     local project_type="$1"
@@ -467,8 +516,9 @@ $prompt"
         error_exit "Failed to create temporary files"
     fi
     
-    # Clean up temp files on exit
-    trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null" EXIT
+    # Clean up temp files on exit — chain with existing EXIT trap (preserves lock cleanup)
+    # shellcheck disable=SC2064
+    trap "rm -f '$prompt_file' '$claude_log' 2>/dev/null; $(trap -p EXIT | sed "s/^trap -- '//; s/' EXIT$//")" EXIT
     
     echo "$prompt" > "$prompt_file"
     

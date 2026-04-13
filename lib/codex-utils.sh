@@ -64,6 +64,12 @@ run_codex_exec() {
     local stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
     local timeout_secs="${CLAUDUX_TIMEOUT:-600}"
 
+    # Validate timeout value: must be a non-negative integer
+    if ! [[ "$timeout_secs" =~ ^[0-9]+$ ]]; then
+        echo "WARN: CLAUDUX_TIMEOUT='$timeout_secs' is not a valid integer — using default 600s" >&2
+        timeout_secs=600
+    fi
+
     # Guard: verify codex is still reachable (PATH may have changed since source)
     if ! command -v codex >/dev/null 2>&1; then
         echo '{"type":"error","message":"codex CLI not found in PATH at execution time"}' >&2
@@ -95,7 +101,9 @@ run_codex_exec() {
     local rc=$?
     # Exit code 124 from timeout/gtimeout means the command timed out
     if [[ $rc -eq 124 ]]; then
-        echo '{"type":"error","message":"Codex execution timed out after '"$timeout_secs"'s"}' >&2
+        local timeout_msg='{"type":"error","message":"Codex execution timed out after '"$timeout_secs"'s"}'
+        echo "$timeout_msg" >&2
+        echo "$timeout_msg" >> "$stderr_log"
     fi
     return $rc
 }

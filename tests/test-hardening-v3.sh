@@ -369,7 +369,7 @@ TEST_DIR=$(setup_repo)
 
     # Now CLI status should work (dispatches through bin/claudux)
     output=$(bash "$REPO_ROOT/bin/claudux" status 2>&1)
-    if echo "$output" | grep -q "Last documented:"; then
+    if echo "$output" | grep -q "Last generated:"; then
         echo "works"
     else
         echo "broken: $output"

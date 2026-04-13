@@ -383,11 +383,10 @@ TEST_DIR=$(setup_repo)
     echo "GARBAGE" > "$STATE_FILE"
     output=$(claudux_status 2>&1)
     ec=$?
-    echo "ec=$ec"
+    echo "$ec"
 ) > /tmp/claudux-hv2-t22 2>&1
-# claudux_status should handle the corrupt state as "no state"
-result22=$(cat /tmp/claudux-hv2-t22)
-assert_contains "status handles corrupt state" "$result22" "ec=1"
+# claudux_status should return 1 for corrupt state (load_claudux_state returns non-zero)
+assert_eq "status handles corrupt state" "1" "$(cat /tmp/claudux-hv2-t22)"
 rm -rf "$TEST_DIR"
 
 # ═══════════════════════════════════════════
