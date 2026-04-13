@@ -9,19 +9,30 @@ check_codex() {
 
     success "Codex CLI found: $(codex --version)"
 
-    # Probe authentication: run a trivial exec and look for auth errors.
-    # Codex CLI prints auth errors to stderr and exits non-zero.
+    # Probe authentication. Prefer `codex login status` (zero-token, purpose-built)
+    # over running a real `codex exec` call. The old probe burned ~28K codex tokens
+    # per claudux invocation on a throwaway "echo hello" prompt — wasted compute
+    # before any real work started.
     local probe_out probe_rc
-    probe_out=$(codex exec -m "${CODEX_MODEL:-gpt-5.4}" --json 'echo hello' 2>&1) || probe_rc=$?
-    probe_rc=${probe_rc:-0}
-
-    if [[ $probe_rc -ne 0 ]]; then
-        # Detect common auth failure patterns
-        if echo "$probe_out" | grep -qiE 'auth|api.key|unauthorized|401|login|token'; then
-            error_exit "Codex CLI is not authenticated. Run 'codex auth' to log in, or set OPENAI_API_KEY."
+    if codex login status --help &> /dev/null; then
+        # Modern codex CLI (login subcommand exists). Zero-token probe.
+        probe_out=$(codex login status 2>&1) || probe_rc=$?
+        probe_rc=${probe_rc:-0}
+        if [[ $probe_rc -ne 0 ]] || ! echo "$probe_out" | grep -qiE 'logged in|authenticated'; then
+            error_exit "Codex CLI is not authenticated. Run 'codex login' to log in, or set OPENAI_API_KEY."
         fi
-        # Non-auth failure (e.g. rate limit, network) — warn but don't block
-        warn "Codex CLI probe returned exit code $probe_rc (may be transient)"
+    else
+        # Legacy codex CLI without `login status` subcommand. Fall back to an
+        # exec probe but flag it so users upgrade.
+        warn "codex CLI lacks 'login status' subcommand — falling back to exec probe (wastes ~28K tokens). Upgrade: npm install -g @openai/codex"
+        probe_out=$(codex exec -m "${CODEX_MODEL:-gpt-5.4}" --json 'echo hello' 2>&1) || probe_rc=$?
+        probe_rc=${probe_rc:-0}
+        if [[ $probe_rc -ne 0 ]]; then
+            if echo "$probe_out" | grep -qiE 'auth|api.key|unauthorized|401|login|token'; then
+                error_exit "Codex CLI is not authenticated. Run 'codex login' to log in, or set OPENAI_API_KEY."
+            fi
+            warn "Codex CLI probe returned exit code $probe_rc (may be transient)"
+        fi
     fi
 
     info "Using Codex backend (CLAUDUX_BACKEND=codex)"

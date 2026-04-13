@@ -349,10 +349,13 @@ assert_eq "auth error keywords all match grep pattern" "all-match" "$(cat /tmp/c
 assert_eq "non-auth errors do not match auth pattern" "0" "$(cat /tmp/claudux-harden-t26)"
 
 # --- Test 27: check_codex function signature includes auth probe ---
+# Accepts either the modern zero-token `codex login status` probe OR the legacy
+# `codex exec ... echo hello` fallback (kept for back-compat with older CLIs).
 (
     source "$LIB_DIR/codex-utils.sh"
     fn_body=$(declare -f check_codex)
-    if echo "$fn_body" | grep -q 'codex exec.*echo hello'; then
+    if echo "$fn_body" | grep -q 'codex login status' \
+       || echo "$fn_body" | grep -q 'codex exec.*echo hello'; then
         echo "has-probe"
     else
         echo "no-probe"
@@ -360,17 +363,35 @@ assert_eq "non-auth errors do not match auth pattern" "0" "$(cat /tmp/claudux-ha
 ) > /tmp/claudux-harden-t27 2>&1
 assert_eq "check_codex has auth probe" "has-probe" "$(cat /tmp/claudux-harden-t27)"
 
-# --- Test 28: check_codex error message mentions 'codex auth' ---
+# --- Test 28: check_codex error message mentions 'codex login' (remedy) ---
 (
     source "$LIB_DIR/codex-utils.sh"
     fn_body=$(declare -f check_codex)
-    if echo "$fn_body" | grep -q "codex auth"; then
+    if echo "$fn_body" | grep -qE "codex login|codex auth"; then
         echo "has-remedy"
     else
         echo "no-remedy"
     fi
 ) > /tmp/claudux-harden-t28 2>&1
 assert_eq "check_codex error message mentions remedy" "has-remedy" "$(cat /tmp/claudux-harden-t28)"
+
+# --- Test 28b: check_codex prefers the zero-token `login status` probe ---
+# Regression guard: we must not silently fall back to the ~28K-token `echo hello`
+# probe as the primary path. The modern probe must be tried first.
+(
+    source "$LIB_DIR/codex-utils.sh"
+    fn_body=$(declare -f check_codex)
+    login_line=$(echo "$fn_body" | grep -n 'codex login status' | head -1 | cut -d: -f1)
+    exec_line=$(echo "$fn_body" | grep -n 'codex exec.*echo hello' | head -1 | cut -d: -f1)
+    if [[ -z "$login_line" ]]; then
+        echo "no-modern-probe"
+    elif [[ -n "$exec_line" ]] && [[ "$login_line" -gt "$exec_line" ]]; then
+        echo "modern-probe-not-primary"
+    else
+        echo "modern-probe-first"
+    fi
+) > /tmp/claudux-harden-t28b 2>&1
+assert_eq "check_codex prefers zero-token login-status probe" "modern-probe-first" "$(cat /tmp/claudux-harden-t28b)"
 
 # ═══════════════════════════════════════════
 # Timeout handling in run_codex_exec()
