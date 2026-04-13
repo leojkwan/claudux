@@ -181,6 +181,36 @@ for cmd in $advertised_cmds; do
     fi
 done
 
+# Every advertised short/long option must be handled by at least one case arm.
+# Catches phantom flags like a prior "-q" in help with no parser entry.
+# Matches either quoted ("--opt") or alternation (-m|--message) case arms.
+# Only grab flags that appear at the left of an option line (i.e. preceded
+# by whitespace or start-of-line), not mid-word hyphens like "high-level".
+advertised_opts=$(echo "$help_output" \
+    | awk '/^Options:/,/^$/' \
+    | grep -oE '(^|[[:space:]])(-{1,2}[A-Za-z][A-Za-z-]*)' \
+    | awk '{print $NF}' \
+    | sort -u)
+for opt in $advertised_opts; do
+    # Skip option-list header artifacts
+    case "$opt" in "-"|"--") continue ;; esac
+    # Escape dashes for grep; match "--opt") OR -m|...) OR |--opt)
+    esc_opt=$(printf '%s' "$opt" | sed 's/[][\.*^$/]/\\&/g')
+    if grep -rqE "\"${esc_opt}\"\\)|(\\||^|[[:space:]])${esc_opt}(\\)|\\|)" \
+            "$REPO_ROOT/bin/claudux" "$REPO_ROOT/lib"/*.sh; then
+        pass "advertised option '$opt' has a parser entry"
+    else
+        fail "advertised option '$opt' has NO parser entry" "help says it exists but invoking it would fail"
+    fi
+done
+
+# Regression: phantom -q / --quiet must never be advertised (removed 2026-04-13)
+if echo "$help_output" | grep -qE '^\s*-q\b|--quiet'; then
+    fail "help advertises phantom '-q/--quiet' flag" "no such flag is implemented"
+else
+    pass "help does not advertise phantom '-q/--quiet' flag"
+fi
+
 # ── 6. Unknown command ───────────────────────────────────────────────
 section "CLI: unknown command"
 
