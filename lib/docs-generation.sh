@@ -266,7 +266,7 @@ build_generation_prompt() {
    - List any OBSOLETE files with 95%+ confidence
    - Show the final documentation structure
 
- 5. **Generate VitePress Configuration**:
+5. **Generate VitePress Configuration**:
    - Create docs/.vitepress/config.ts based on your analysis
    - Auto-detect project name, description from package.json/README or similar manifest files
    - For projects with logos/icons, detect and use them appropriately
@@ -295,7 +295,7 @@ build_generation_prompt() {
    - Logo path if found
    - Clean URLs enabled
 
- 6. **Validate All Links**:
+6. **Validate All Links**:
    CRITICAL: Every link in config.ts MUST correspond to a file you plan to create!
    - For each sidebar item link (e.g., '/guide/setup'), ensure you're creating 'guide/setup.md'
    - For hash links (e.g., '/guide/setup#installation'), ensure that heading exists
@@ -318,8 +318,6 @@ DOCUMENTATION ACCURACY GUIDELINES:
   - Examples: Use real code examples from the actual codebase, not hypothetical ones
   - Adapt tone and structure to match the project's domain (e.g., enterprise vs open source)
   - Respect existing documentation conventions if updating an existing docs folder
-  - Verbosity is enabled by default; do NOT document verbose flags (e.g., -v/--verbose) or any CLAUDUX_VERBOSE env configuration
-  - Default AI model is Sonnet for speed; if you mention model selection, state that users can force Opus via FORCE_MODEL=opus when needed
 
 VITEPRESS CONFIGURATION BEST PRACTICES:
   - Only reference assets that exist in the project or that you're creating
