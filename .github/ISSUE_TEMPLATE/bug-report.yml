@@ -9,7 +9,7 @@ body:
     attributes:
       label: claudux version
       description: Run `claudux --version` and paste the output.
-      placeholder: "1.1.1"
+      placeholder: "1.2.0"
     validations:
       required: true
   - type: textarea

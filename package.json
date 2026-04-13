@@ -1,7 +1,7 @@
 {
   "name": "claudux",
-  "version": "1.1.1",
-  "description": "AI-powered documentation generator for your codebase using Claude Code and VitePress",
+  "version": "1.2.0",
+  "description": "AI-powered documentation generator with multi-backend support (Claude, Codex) and change tracking",
   "main": "claudux",
   "bin": {
     "claudux": "./bin/claudux"
@@ -21,10 +21,14 @@
     "claude",
     "claude-code",
     "vitepress",
+    "codex",
+    "openai",
+    "multi-backend",
     "cli",
     "static-site",
     "developer-tools",
     "link-check",
+    "change-tracking",
     "cleanup"
   ],
   "repository": {
