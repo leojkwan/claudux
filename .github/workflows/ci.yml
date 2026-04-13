@@ -119,3 +119,21 @@ jobs:
             echo "MISMATCH: package.json=$pkg_version, CLI=$cli_output"
             exit 1
           fi
+
+  tests:
+    name: Test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure git for tests
+        run: |
+          git config --global user.email "ci@claudux.dev"
+          git config --global user.name "CI"
+
+      - name: Run core tests (run-tests.sh)
+        run: bash tests/run-tests.sh
+
+      - name: Run extended tests (run-all.sh)
+        run: bash tests/run-all.sh
