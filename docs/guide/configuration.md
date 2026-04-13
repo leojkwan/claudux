@@ -94,18 +94,6 @@ FORCE_MODEL=opus claudux update
 FORCE_MODEL=sonnet claudux update
 ```
 
-### Verbosity Control
-
-Claudux is verbose by default. Control output level:
-
-```bash
-# Quiet mode (errors only)
-claudux -q update
-
-# Default verbose mode
-claudux update
-```
-
 ### Pre-set Directives
 
 Set a default message for documentation updates:

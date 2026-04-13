@@ -18,9 +18,9 @@ claudux update --with "Focus on the authentication module"
 
 **Process:**
 1. Scans source code for structure and patterns
-2. Analyzes existing documentation for outdated content  
+2. Analyzes existing documentation for outdated content
 3. Generates new pages and updates existing ones
-4. Validates all links to prevent 404s
+4. Validates internal links (external URLs are skipped) to prevent 404s
 5. Shows detailed change summary
 
 ### `claudux serve` 
@@ -195,12 +195,7 @@ CLAUDUX_MESSAGE="Focus on API docs" claudux update
 ```bash
 claudux update -m "message"     # Focused directive
 claudux update --with "message" # Same as -m
-claudux update --strict         # Fail on broken links
-```
-
-**Global flags:**
-```bash
-claudux -q update              # Quiet mode (errors only)
+claudux update --strict         # Re-prompt (then error) on broken internal links
 ```
 
 ## Command Workflow

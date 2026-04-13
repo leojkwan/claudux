@@ -198,7 +198,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --with, -m               - Provide a high-level directive to guide generation"
-    echo "  -q                       - Quiet (errors only)"
+    echo "  --strict                 - Fail on broken internal links (update command)"
     echo ""
     echo "Environment:"
     echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: sonnet)"
