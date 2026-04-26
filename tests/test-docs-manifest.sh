@@ -48,6 +48,7 @@ setup_manifest_repo() {
             '      "id": "technical.deterministic-generation",' \
             '      "path": "docs/technical/deterministic-generation.md",' \
             '      "title": "Deterministic Generation",' \
+            '      "nav_group": "technical",' \
             '      "order": 110,' \
             '      "deletion_policy": "never_delete_without_manifest_change",' \
             '      "source_patterns": ["lib/docs-generation.sh", "lib/docs-manifest.sh"],' \
@@ -83,6 +84,7 @@ setup_manifest_repo() {
             '      "id": "api.index",' \
             '      "path": "docs/api/index.md",' \
             '      "title": "API",' \
+            '      "nav_group": "api",' \
             '      "order": 120,' \
             '      "deletion_policy": "never_delete_without_manifest_change",' \
             '      "source_patterns": ["bin/claudux"]' \
@@ -746,6 +748,32 @@ assert_contains "external navigation link fails validation" "$(cat /tmp/claudux-
 assert_contains "missing navigation target fails validation" "$(cat /tmp/claudux-manifest-t26)" 'api: link "/missing/" must resolve to a manifest page (docs/missing/index.md)'
 rm -rf "$TEST_DIR"
 
+# --- Test 27: manifest IDs and nav groups must be stable patch keys ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.navigation[0].id = 'technical/docs';
+manifest.pages[0].id = 'technical#deterministic-generation';
+manifest.pages[0].nav_group = 'tech docs';
+manifest.pages[0].sections[0].id = 'pipeline#rewrite';
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t27-output 2>&1; then
+        echo "expected manifest key validation to fail"
+    else
+        cat /tmp/claudux-manifest-t27-output
+    fi
+) > /tmp/claudux-manifest-t27 2>&1
+assert_contains "unsafe navigation id fails validation" "$(cat /tmp/claudux-manifest-t27)" "technical/docs: id must be a stable manifest key"
+assert_contains "unsafe page id fails validation" "$(cat /tmp/claudux-manifest-t27)" "technical#deterministic-generation: id must be a stable manifest key"
+assert_contains "unsafe nav group fails validation" "$(cat /tmp/claudux-manifest-t27)" "technical#deterministic-generation: nav_group must be a stable manifest key"
+assert_contains "unsafe section id fails validation" "$(cat /tmp/claudux-manifest-t27)" "pipeline#rewrite: id must be a stable manifest key"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
@@ -768,6 +796,7 @@ rm -f /tmp/claudux-manifest-t23
 rm -f /tmp/claudux-manifest-t24 /tmp/claudux-manifest-t24-output
 rm -f /tmp/claudux-manifest-t25 /tmp/claudux-manifest-t25-output
 rm -f /tmp/claudux-manifest-t26 /tmp/claudux-manifest-t26-output
+rm -f /tmp/claudux-manifest-t27 /tmp/claudux-manifest-t27-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

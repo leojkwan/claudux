@@ -111,6 +111,20 @@ function validateRequiredEnum(owner, field, allowed, label) {
   }
 }
 
+function validateManifestKey(owner, field, label) {
+  if (!Object.prototype.hasOwnProperty.call(owner, field) || typeof owner[field] !== 'string' || owner[field].trim().length === 0) {
+    fail(`${label}: missing string ${field}`);
+    return null;
+  }
+
+  const value = owner[field];
+  if (value !== value.trim() || !/^[a-z0-9][a-z0-9._-]*$/.test(value)) {
+    fail(`${label}: ${field} must be a stable manifest key ([a-z0-9][a-z0-9._-]*)`);
+    return null;
+  }
+  return value;
+}
+
 function docsPathFromNavigationLink(link) {
   if (typeof link !== 'string') return null;
   const value = link.trim();
@@ -171,12 +185,13 @@ if (manifest) {
           fail(`navigation[${navIndex}] must be an object`);
           continue;
         }
-        if (!item.id || typeof item.id !== 'string') {
-          fail(`${label}: missing string id`);
-        } else if (navIds.has(item.id)) {
-          fail(`${label}: duplicate navigation id`);
-        } else {
-          navIds.add(item.id);
+        const navId = validateManifestKey(item, 'id', label);
+        if (navId) {
+          if (navIds.has(navId)) {
+            fail(`${label}: duplicate navigation id`);
+          } else {
+            navIds.add(navId);
+          }
         }
         if (typeof item.title !== 'string' || item.title.trim().length === 0) {
           fail(`${label}: missing string title`);
@@ -209,13 +224,15 @@ if (manifest) {
       continue;
     }
 
-    if (!page.id || typeof page.id !== 'string') {
-      fail(`${label}: missing string id`);
-    } else if (pageIds.has(page.id)) {
-      fail(`${label}: duplicate page id`);
-    } else {
-      pageIds.add(page.id);
+    const pageId = validateManifestKey(page, 'id', label);
+    if (pageId) {
+      if (pageIds.has(pageId)) {
+        fail(`${label}: duplicate page id`);
+      } else {
+        pageIds.add(pageId);
+      }
     }
+    validateManifestKey(page, 'nav_group', label);
 
     if (!page.path || typeof page.path !== 'string') {
       fail(`${label}: missing string path`);
@@ -265,12 +282,13 @@ if (manifest) {
         fail(`${sectionLabel}: section must be an object`);
         continue;
       }
-      if (!section.id || typeof section.id !== 'string') {
-        fail(`${sectionLabel}: missing string id`);
-      } else if (sectionIds.has(section.id)) {
-        fail(`${sectionLabel}: duplicate section id`);
-      } else {
-        sectionIds.add(section.id);
+      const sectionId = validateManifestKey(section, 'id', sectionLabel);
+      if (sectionId) {
+        if (sectionIds.has(sectionId)) {
+          fail(`${sectionLabel}: duplicate section id`);
+        } else {
+          sectionIds.add(sectionId);
+        }
       }
       if (!section.heading || typeof section.heading !== 'string') {
         fail(`${sectionLabel}: missing string heading`);
