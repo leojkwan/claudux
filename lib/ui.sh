@@ -145,6 +145,10 @@ validate_links() {
     if [[ ! -f "$LIB_DIR/validate-links.sh" ]]; then
         error_exit "❌ Link validation script not found"
     fi
+
+    if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
+        validate_docs_structure_manifest --post-generation || return 1
+    fi
     
     # Run validation script; also capture machine-readable list when failing
     local missing_tmp

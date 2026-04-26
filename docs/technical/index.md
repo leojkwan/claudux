@@ -47,6 +47,7 @@ Modular functionality organized by concern:
 | `colors.sh` | Terminal output utilities | `print_color()`, `error_exit()`, `warn()` |
 | `project.sh` | Project detection and config | `detect_project_type()`, `load_project_config()` |
 | `claude-utils.sh` | Claude AI integration | `check_claude()`, `get_model_settings()` |
+| `docs-manifest.sh` | Deterministic docs contracts | `validate_docs_structure_manifest()`, `build_static_analysis_index()` |
 | `docs-generation.sh` | Core generation logic | `build_generation_prompt()`, `update()` |
 | `content-protection.sh` | Content protection | `is_protected_path()`, protection markers |
 | `git-utils.sh` | Git operations | `show_git_status()`, `show_detailed_changes()` |
@@ -94,6 +95,10 @@ claudux update
     │
     ├─ load_project_config()     # Detect type, read claudux.json
     │
+    ├─ validate_docs_structure_manifest()
+    │
+    ├─ build_static_analysis_index()
+    │
     ├─ build_generation_prompt() # Construct AI prompt  
     │
     ├─ claude [prompt]           # AI analysis and generation
@@ -112,8 +117,10 @@ claudux update
 1. Template configuration (project-type specific)
 2. Style guide (.ai-docs-style.md if present)  
 3. Documentation map (docs-map.md if present)
-4. CLAUDE.md (project patterns and conventions)
-5. User directive (--with flag)
+4. Structure manifest (docs-structure.json if present)
+5. Static analysis index (.claudux/index/static-analysis.json)
+6. CLAUDE.md (project patterns and conventions)
+7. User directive (--with flag)
 
 # Output: Comprehensive prompt for two-phase generation
 ```

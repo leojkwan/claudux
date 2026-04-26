@@ -322,7 +322,69 @@ TEST_DIR_MISSING=$(mktemp -d)
 assert_contains "load_claudux_state returns 1 when missing" "$(cat /tmp/claudux-state-t16)" "rc:1"
 rm -rf "$TEST_DIR_MISSING"
 
+# --- Test 17: deterministic metadata records manifest/index coverage ---
+TEST_DIR_DETERMINISTIC=$(mktemp -d /tmp/claudux-state-test-XXXXXX)
+(
+    cd "$TEST_DIR_DETERMINISTIC"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    mkdir -p docs/technical lib
+    printf '# Deterministic Generation\n\n## Pipeline\n\nPatch bounded sections only.\n' > docs/technical/deterministic-generation.md
+    printf '#!/bin/bash\nupdate() { :; }\n' > lib/docs-generation.sh
+    printf '%s\n' \
+        '{' \
+        '  "version": 1,' \
+        '  "pages": [' \
+        '    {' \
+        '      "id": "technical.deterministic-generation",' \
+        '      "path": "docs/technical/deterministic-generation.md",' \
+        '      "title": "Deterministic Generation",' \
+        '      "deletion_policy": "never_delete_without_manifest_change",' \
+        '      "source_patterns": ["lib/docs-generation.sh"],' \
+        '      "sections": [' \
+        '        {' \
+        '          "id": "pipeline",' \
+        '          "heading": "Pipeline",' \
+        '          "level": 2,' \
+        '          "pinned": true,' \
+        '          "source_patterns": ["lib/docs-generation.sh"]' \
+        '        }' \
+        '      ]' \
+        '    }' \
+        '  ]' \
+        '}' > docs-structure.json
+    git add docs-structure.json docs/technical/deterministic-generation.md lib/docs-generation.sh
+    git commit -q -m "deterministic fixture"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_INDEX_DIR="$TEST_DIR_DETERMINISTIC/.claudux/index"
+    CLAUDUX_STATIC_INDEX_FILE="$TEST_DIR_DETERMINISTIC/.claudux/index/static-analysis.json"
+    build_static_analysis_index >/dev/null
+    STATE_FILE="$TEST_DIR_DETERMINISTIC/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    save_claudux_state
+    node - "$STATE_FILE" <<'NODE'
+const fs = require('fs');
+const state = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const deterministic = state.deterministic || {};
+console.log(`prompt=${deterministic.prompt_version}`);
+console.log(`index=${deterministic.index?.version}`);
+console.log(`manifest=${Boolean(deterministic.manifest_hash)}`);
+console.log(`source=${(deterministic.source_hashes || []).some(file => file.path === 'lib/docs-generation.sh')}`);
+console.log(`section=${(deterministic.doc_section_hashes || []).some(section => section.section_id === 'pipeline' && section.pinned === true)}`);
+console.log(`coverage=${(deterministic.source_to_section_coverage || []).some(entry => entry.section_id === 'pipeline' && entry.source_pattern === 'lib/docs-generation.sh')}`);
+NODE
+) > /tmp/claudux-state-t17 2>&1
+state17=$(cat /tmp/claudux-state-t17)
+assert_contains "deterministic state records prompt version" "$state17" "prompt=docs-generation-v1"
+assert_contains "deterministic state records index version" "$state17" "index=1"
+assert_contains "deterministic state records manifest hash" "$state17" "manifest=true"
+assert_contains "deterministic state records source hashes" "$state17" "source=true"
+assert_contains "deterministic state records doc section hashes" "$state17" "section=true"
+assert_contains "deterministic state records source-to-section coverage" "$state17" "coverage=true"
+rm -rf "$TEST_DIR_DETERMINISTIC"
+
 # Cleanup
-rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}
+rm -f /tmp/claudux-state-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17}
 
 test_summary

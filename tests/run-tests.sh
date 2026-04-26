@@ -49,6 +49,7 @@ required_files=(
     "lib/content-protection.sh"
     "lib/claude-utils.sh"
     "lib/git-utils.sh"
+    "lib/docs-manifest.sh"
     "lib/docs-generation.sh"
     "lib/cleanup.sh"
     "lib/server.sh"

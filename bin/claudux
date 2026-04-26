@@ -87,7 +87,7 @@ if [[ ! -d "$LIB_DIR" ]]; then
 fi
 
 # Source all library modules with error handling
-REQUIRED_LIBS=("colors.sh" "project.sh" "content-protection.sh" "claude-utils.sh" "git-utils.sh" "docs-generation.sh" "cleanup.sh" "server.sh" "ui.sh")
+REQUIRED_LIBS=("colors.sh" "project.sh" "content-protection.sh" "claude-utils.sh" "git-utils.sh" "docs-manifest.sh" "docs-generation.sh" "cleanup.sh" "server.sh" "ui.sh")
 
 for lib in "${REQUIRED_LIBS[@]}"; do
     lib_path="$LIB_DIR/$lib"

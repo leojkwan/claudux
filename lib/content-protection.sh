@@ -8,26 +8,26 @@ get_protection_markers() {
     
     case "$ext" in
         md|markdown)
-            echo "<!-- skip -->" "<!-- /skip -->"
+            printf '%s\n%s\n' "<!-- skip -->" "<!-- /skip -->"
             ;;
         swift|js|ts|jsx|tsx|java|c|cpp|h|hpp|rs|go)
-            echo "// skip" "// /skip"
+            printf '%s\n%s\n' "// skip" "// /skip"
             ;;
         py|sh|bash|zsh|rb|pl)
-            echo "# skip" "# /skip"
+            printf '%s\n%s\n' "# skip" "# /skip"
             ;;
         html|xml|vue)
-            echo "<!-- skip -->" "<!-- /skip -->"
+            printf '%s\n%s\n' "<!-- skip -->" "<!-- /skip -->"
             ;;
         css|scss|sass|less)
-            echo "/* skip */" "/* /skip */"
+            printf '%s\n%s\n' "/* skip */" "/* /skip */"
             ;;
         sql)
-            echo "-- skip" "-- /skip"
+            printf '%s\n%s\n' "-- skip" "-- /skip"
             ;;
         *)
             # Default to hash comment
-            echo "# skip" "# /skip"
+            printf '%s\n%s\n' "# skip" "# /skip"
             ;;
     esac
 }
@@ -43,16 +43,23 @@ strip_protected_content() {
         return 1
     fi
     
-    # Get appropriate comment markers for this file type
-    local markers
-    read -ra markers <<< "$(get_protection_markers "$file")"
-    local start_marker="${markers[0]}"
-    local end_marker="${markers[1]}"
+    # Get appropriate comment markers for this file type. Markers contain
+    # spaces, so read them as two literal lines rather than shell words.
+    local start_marker=""
+    local end_marker=""
+    {
+        IFS= read -r start_marker
+        IFS= read -r end_marker
+    } < <(get_protection_markers "$file")
     
-    # Remove protected sections using awk
+    # Remove protected sections using literal full-line marker matching.
     awk -v start="$start_marker" -v end="$end_marker" '
-        $0 ~ start { skip=1; next }
-        $0 ~ end { skip=0; next }
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+        trim($0) == start { skip=1; next }
+        trim($0) == end { skip=0; next }
         !skip { print }
     ' "$file" > "$temp_file"
     

@@ -2,6 +2,133 @@
 # Documentation generation and update functions
 
 STATE_FILE=".claudux-state.json"
+CLAUDUX_PROMPT_VERSION="${CLAUDUX_PROMPT_VERSION:-docs-generation-v1}"
+
+# Build deterministic checkpoint metadata from the static analysis index.
+# This stays best-effort so state saving never fails after successful docs output.
+build_deterministic_state_metadata_json() {
+    local prompt_version="${CLAUDUX_PROMPT_VERSION:-docs-generation-v1}"
+    local index_file="${CLAUDUX_STATIC_INDEX_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/static-analysis.json}"
+
+    if ! command -v node >/dev/null 2>&1; then
+        printf '{"prompt_version":"%s","index":null,"manifest_hash":null,"source_hashes":[],"doc_section_hashes":[],"source_to_section_coverage":[]}' "$prompt_version"
+        return 0
+    fi
+
+    node - "$prompt_version" "$index_file" <<'NODE'
+const fs = require('fs');
+const crypto = require('crypto');
+
+const promptVersion = process.argv[2];
+const indexFile = process.argv[3];
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function fallback(error) {
+  return {
+    prompt_version: promptVersion,
+    index: null,
+    manifest_hash: null,
+    source_hashes: [],
+    doc_section_hashes: [],
+    source_to_section_coverage: [],
+    error: error ? String(error.message || error) : undefined,
+  };
+}
+
+function sectionHash(pagePath, section) {
+  if (!section || !section.heading || !section.level || !fs.existsSync(pagePath)) {
+    return null;
+  }
+
+  const lines = fs.readFileSync(pagePath, 'utf8').split(/\r?\n/);
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
+  );
+  const start = lines.findIndex(line => headingPattern.test(line));
+  if (start === -1) return null;
+
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const match = lines[i].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= section.level) {
+      end = i;
+      break;
+    }
+  }
+
+  return sha256(lines.slice(start, end).join('\n'));
+}
+
+let metadata = fallback();
+
+try {
+  if (fs.existsSync(indexFile)) {
+    const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+    const ownership = Array.isArray(index.source_ownership) ? index.source_ownership : [];
+
+    metadata = {
+      prompt_version: promptVersion,
+      index: {
+        path: indexFile,
+        version: index.version ?? null,
+        head_sha: index.head_sha ?? null,
+      },
+      manifest_hash: index.manifest?.sha256 ?? null,
+      source_hashes: Array.isArray(index.source_files)
+        ? index.source_files.map(file => ({ path: file.path, sha256: file.sha256 }))
+        : [],
+      doc_section_hashes: [],
+      source_to_section_coverage: [],
+    };
+
+    for (const page of ownership) {
+      for (const pattern of page.source_patterns || []) {
+        metadata.source_to_section_coverage.push({
+          source_pattern: pattern,
+          page_id: page.page_id,
+          section_id: null,
+          path: page.path,
+        });
+      }
+
+      for (const section of page.sections || []) {
+        for (const pattern of section.source_patterns || []) {
+          metadata.source_to_section_coverage.push({
+            source_pattern: pattern,
+            page_id: page.page_id,
+            section_id: section.section_id,
+            path: page.path,
+          });
+        }
+
+        const digest = sectionHash(page.path, section);
+        if (digest) {
+          metadata.doc_section_hashes.push({
+            path: page.path,
+            page_id: page.page_id,
+            section_id: section.section_id,
+            heading: section.heading,
+            pinned: section.pinned === true,
+            sha256: digest,
+          });
+        }
+      }
+    }
+  }
+} catch (error) {
+  metadata = fallback(error);
+}
+
+console.log(JSON.stringify(metadata, null, 2));
+NODE
+}
 
 # Save a change-tracking checkpoint after successful doc generation.
 # Records HEAD SHA, timestamp, backend used, and which files were documented.
@@ -11,6 +138,8 @@ save_claudux_state() {
     local timestamp
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local backend="${CLAUDUX_BACKEND:-claude}"
+    local deterministic_state
+    deterministic_state=$(build_deterministic_state_metadata_json)
 
     # Collect documented files (everything under docs/ tracked by git + untracked new)
     local files_json="[]"
@@ -33,7 +162,8 @@ save_claudux_state() {
   "last_sha": "$head_sha",
   "last_run": "$timestamp",
   "backend": "$backend",
-  "files_documented": $files_json
+  "files_documented": $files_json,
+  "deterministic": $deterministic_state
 }
 EOJSON
     info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
@@ -179,13 +309,26 @@ build_generation_prompt() {
         template_config="$LIB_DIR/templates/generic/config.json"
     fi
     
-    # Documentation map
-    for mapfile in "docs-map.md" "docs-structure.json"; do
-        if [[ -f "$mapfile" ]]; then
-            docs_map="$mapfile"
-            break
-        fi
-    done
+    # Documentation map / deterministic structure manifest. Prefer the tracked
+    # manifest over legacy docs-map.md whenever both exist.
+    local docs_structure_manifest=""
+    local legacy_docs_map=""
+    if declare -F docs_structure_path >/dev/null 2>&1; then
+        docs_structure_manifest="$(docs_structure_path)"
+    else
+        docs_structure_manifest="docs-structure.json"
+    fi
+    if [[ ! -f "$docs_structure_manifest" ]]; then
+        docs_structure_manifest=""
+    fi
+    if [[ -f "docs-map.md" ]]; then
+        legacy_docs_map="docs-map.md"
+    fi
+    if [[ -n "$docs_structure_manifest" ]]; then
+        docs_map="$docs_structure_manifest"
+    elif [[ -n "$legacy_docs_map" ]]; then
+        docs_map="$legacy_docs_map"
+    fi
     
     # Project-specific coding patterns (CLAUDE.md)
     local claudux_patterns=""
@@ -214,9 +357,16 @@ build_generation_prompt() {
 - Read $style_guide for universal AI documentation principles"
     fi
     
-    if [[ -n "$docs_map" ]]; then
+    if [[ -n "$docs_structure_manifest" ]]; then
         prompt+="
-- Read $docs_map for loose documentation guidance and protected areas"
+- Read $docs_map as the deterministic docs manifest: page IDs, paths, nav order, source ownership, required sections, pinned sections, and deletion_policy are binding inputs. Preserve them unless the manifest itself changes."
+        if [[ -n "$legacy_docs_map" ]]; then
+            prompt+="
+- Read $legacy_docs_map as supplemental legacy guidance only; if it conflicts with $docs_map, the deterministic manifest wins."
+        fi
+    elif [[ -n "$legacy_docs_map" ]]; then
+        prompt+="
+- Read $legacy_docs_map for loose documentation guidance and protected areas"
     fi
     
     if [[ -n "$claudux_patterns" ]]; then
@@ -242,10 +392,10 @@ build_generation_prompt() {
 🧠 First, analyze the entire project and create a detailed plan:
 
 1. **Read Configuration & Templates**:
-   - Load all template configs, style guides, and docs-map files
+   - Load all template configs, style guides, docs-map files, and docs-structure.json when present
    - Read lib/vitepress/sidebar-example.md for sidebar configuration patterns
    - Understand the expected documentation structure from templates
-   - Note any protected areas or special requirements
+   - Note any protected areas, pinned sections, source-owned pages, and deletion policies
    - Analyze existing docs structure if present
 
 2. **Analyze Codebase Structure**:
@@ -340,6 +490,7 @@ Output your complete analysis and plan, then proceed to Phase 2.
 - Generate all planned documentation files
 - Use accurate, current code examples
 - Follow template structures exactly
+- If docs-structure.json exists, only create pages or sections that are allowed by the manifest or explicitly propose the manifest change in your plan
 - Reference CLAUDE.md for project-specific coding patterns and conventions when creating technical documentation
 - Ensure all internal links work
 
@@ -354,6 +505,7 @@ VitePress Routing Rules:
 - Add missing sections or details
 - Update code examples to current versions
 - Preserve valuable existing content
+- Preserve pinned sections and page structure from docs-structure.json; patch source-owned generated sections rather than rewriting whole files
 
 - Respect project-specific conventions from CLAUDE.md if present
 - Respect site preferences from claudux.md if present
@@ -362,6 +514,7 @@ VitePress Routing Rules:
 - Delete files referencing non-existent code
 - Remove docs for deleted features
 - Clean up superseded duplicate content
+- Never delete manifest-listed pages or pinned sections unless docs-structure.json deletion_policy allows it
 
 🎯 Quality Checks:
 - Every code example must be from actual current code
@@ -440,12 +593,46 @@ update() {
         info "🎯 Focused directive: ${user_message:0:120}"
     fi
     load_project_config
+
+    if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
+        validate_docs_structure_manifest || error_exit "docs-structure.json failed validation before generation"
+    fi
+
+    local static_index_context=""
+    if declare -F build_static_analysis_index >/dev/null 2>&1; then
+        build_static_analysis_index || error_exit "Static analysis index failed"
+        static_index_context=$(format_static_analysis_index_context)
+    fi
+
+    local section_patch_mode=false
+    local section_patch_context=""
+    if declare -F claudux_section_patch_mode_enabled >/dev/null 2>&1 && claudux_section_patch_mode_enabled; then
+        section_patch_mode=true
+        export CLAUDUX_SECTION_PATCH_MODE=1
+        section_patch_context=$(format_section_patch_contract)
+    fi
+
+    if declare -F capture_docs_structure_guard_snapshot >/dev/null 2>&1; then
+        capture_docs_structure_guard_snapshot || error_exit "Documentation guard snapshot failed"
+    fi
     
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
     local prompt
     prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
+
+    if [[ -n "$static_index_context" ]]; then
+        prompt="${static_index_context}
+
+$prompt"
+    fi
+
+    if [[ -n "$section_patch_context" ]]; then
+        prompt="${section_patch_context}
+
+$prompt"
+    fi
 
     # Incremental mode: if a checkpoint exists and is valid, scope to changed files.
     # Corrupt state or missing file falls through to full scan silently.
@@ -459,11 +646,28 @@ update() {
             info "Incremental mode: $count file(s) changed since last run"
             local file_list
             file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
+            local impacted_docs=""
+            if declare -F resolve_impacted_docs_from_changed_files >/dev/null 2>&1; then
+                local impact_allowlist_file="${CLAUDUX_IMPACT_ALLOWLIST_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/impacted-docs.json}"
+                impacted_docs=$(CLAUDUX_CHANGED_FILES="$changed_files" CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file" resolve_impacted_docs_from_changed_files 2>/dev/null || true)
+                if [[ -f "$impact_allowlist_file" ]]; then
+                    export CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file"
+                fi
+            fi
+            local base_prompt="$prompt"
             prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.
 
 Changed files: $file_list
+"
+            if [[ -n "$impacted_docs" ]]; then
+                prompt+="
+Manifest-owned impacted docs/sections:
+$impacted_docs
+"
+            fi
 
-$prompt"
+            prompt+="
+$base_prompt"
         elif [[ $diff_rc -eq 0 ]]; then
             info "No source changes since last run — running full scan"
         else
@@ -533,25 +737,33 @@ $prompt"
 
         # Always be verbose when streaming JSON
         local verbose_flag="--verbose"
+        local allowed_tools="Read,Write,Edit,Delete"
+        local permission_args=(--permission-mode acceptEdits)
+        if $section_patch_mode; then
+            allowed_tools="Read"
+            permission_args=()
+            info "Section patch mode: direct docs writes disabled for Claude"
+        fi
+
+        local output_format_args=()
+        if [[ -n "$output_format_flag" ]]; then
+            output_format_args=(--output-format stream-json)
+        fi
+
+        local claude_args=(
+            --print
+            --model "$model"
+            --allowedTools "$allowed_tools"
+            "${permission_args[@]}"
+            "$verbose_flag"
+            "${output_format_args[@]}"
+            "$prompt"
+        )
 
         if command -v stdbuf &> /dev/null; then
-            ( stdbuf -o0 -e0 claude \
-                --print \
-                --model "$model" \
-                --allowedTools "Read,Write,Edit,Delete" \
-                --permission-mode acceptEdits \
-                $verbose_flag \
-                $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
+            ( stdbuf -o0 -e0 claude "${claude_args[@]}" 2>&1 | tee "$claude_log" ) | $formatter &
         else
-            ( claude \
-                --print \
-                --model "$model" \
-                --allowedTools "Read,Write,Edit,Delete" \
-                --permission-mode acceptEdits \
-                $verbose_flag \
-                $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
+            ( claude "${claude_args[@]}" 2>&1 | tee "$claude_log" ) | $formatter &
         fi
         local stream_pid=$!
 
@@ -586,6 +798,9 @@ $prompt"
         # shellcheck disable=SC2034 # codex_model/codex_timeout_msg/codex_effort destructured for future use
         IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
         info "Model: $codex_model_name"
+        if $section_patch_mode; then
+            info "Section patch mode: requesting read-only Codex sandbox"
+        fi
 
         ( run_codex_exec "$prompt" | tee "$claude_log" ) | format_codex_output_stream &
         local stream_pid=$!
@@ -645,6 +860,12 @@ $prompt"
     echo ""
     
     if [[ $claude_exit_code -eq 0 ]]; then
+        if $section_patch_mode; then
+            local section_patch_file="${CLAUDUX_SECTION_PATCH_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/section-patches.json}"
+            extract_section_patch_payload "$claude_log" "$section_patch_file" || error_exit "Section patch mode did not produce valid patch JSON"
+            apply_manifest_section_patches "$section_patch_file" || error_exit "Section patch application failed"
+        fi
+
         success "Documentation update complete!"
         echo ""
 
@@ -660,6 +881,14 @@ $prompt"
             fi
         fi
         
+        if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
+            validate_docs_structure_manifest --post-generation || error_exit "docs-structure.json validation failed after generation"
+        fi
+
+        if declare -F validate_docs_structure_guard_snapshot >/dev/null 2>&1; then
+            validate_docs_structure_guard_snapshot || error_exit "Protected documentation structure changed during generation"
+        fi
+
         # Validate links in generated documentation
         info "🔍 Step 3: Validating documentation links..."
         if [[ -f "$LIB_DIR/validate-links.sh" ]]; then
