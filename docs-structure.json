@@ -122,7 +122,8 @@
         "lib/docs-generation.sh",
         "lib/cleanup.sh",
         "lib/content-protection.sh",
-        "tests/test-docs-manifest.sh"
+        "tests/test-docs-manifest.sh",
+        "tests/test-content-protection.sh"
       ],
       "sections": [
         {
@@ -174,6 +175,16 @@
             "docs-structure.json",
             "lib/docs-manifest.sh",
             "lib/content-protection.sh"
+          ]
+        },
+        {
+          "id": "content-protection-markers",
+          "heading": "Content Protection Markers",
+          "level": 2,
+          "source_patterns": [
+            "lib/content-protection.sh",
+            "tests/test-content-protection.sh",
+            "tests/test-docs-manifest.sh"
           ]
         },
         {

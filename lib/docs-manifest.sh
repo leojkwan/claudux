@@ -474,6 +474,62 @@ function docsLinksFor(filePath) {
   return links;
 }
 
+function protectionMarkersFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase().replace(/^\./, '');
+  if (['md', 'markdown', 'html', 'xml', 'vue'].includes(ext)) {
+    return { start: '<!-- skip -->', end: '<!-- /skip -->' };
+  }
+  if (['swift', 'js', 'ts', 'jsx', 'tsx', 'java', 'c', 'cpp', 'h', 'hpp', 'rs', 'go'].includes(ext)) {
+    return { start: '// skip', end: '// /skip' };
+  }
+  if (['py', 'sh', 'bash', 'zsh', 'rb', 'pl'].includes(ext)) {
+    return { start: '# skip', end: '# /skip' };
+  }
+  if (['css', 'scss', 'sass', 'less'].includes(ext)) {
+    return { start: '/* skip */', end: '/* /skip */' };
+  }
+  if (ext === 'sql') {
+    return { start: '-- skip', end: '-- /skip' };
+  }
+  return { start: '# skip', end: '# /skip' };
+}
+
+function protectedBlocksForFile(filePath) {
+  const markers = protectionMarkersFor(filePath);
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  const blocks = [];
+  let active = false;
+  let startLine = 0;
+  let blockLines = [];
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!active && trimmed === markers.start) {
+      active = true;
+      startLine = index + 1;
+      blockLines = [line];
+      return;
+    }
+    if (!active) return;
+
+    blockLines.push(line);
+    if (trimmed === markers.end) {
+      blocks.push({
+        path: filePath,
+        start_marker: markers.start,
+        end_marker: markers.end,
+        start_line: startLine,
+        end_line: index + 1,
+        sha256: sha256String(blockLines.join('\n')),
+      });
+      active = false;
+      blockLines = [];
+    }
+  });
+
+  return blocks;
+}
+
 const files = trackedFiles();
 const trackedSet = new Set(files);
 const docsFiles = files.filter(file => file.startsWith('docs/') && file.endsWith('.md'));
@@ -514,6 +570,11 @@ const dependencyEdges = [
   )
   .sort((a, b) => `${a.from}\0${a.to}\0${a.kind}`.localeCompare(`${b.from}\0${b.to}\0${b.kind}`));
 
+const protectedBlockFacts = [...new Set([...sourceFiles, ...docsFiles])]
+  .sort()
+  .flatMap(protectedBlocksForFile)
+  .sort((a, b) => `${a.path}\0${a.start_line}`.localeCompare(`${b.path}\0${b.start_line}`));
+
 const index = {
   version: 1,
   generated_at: new Date().toISOString(),
@@ -549,6 +610,7 @@ const index = {
   docs_links: docsFiles.flatMap(docsLinksFor).sort((a, b) =>
     `${a.from}\0${a.to}`.localeCompare(`${b.from}\0${b.to}`)
   ),
+  protected_blocks: protectedBlockFacts,
   source_ownership: manifest && Array.isArray(manifest.pages)
     ? manifest.pages.map(page => ({
         page_id: page.id,
@@ -605,6 +667,9 @@ if ((index.tests || []).length > 0) {
 }
 if ((index.dependency_edges || []).length > 0) {
   console.log(`- Dependency edges indexed: ${index.dependency_edges.length}`);
+}
+if ((index.protected_blocks || []).length > 0) {
+  console.log(`- Protected content blocks indexed: ${index.protected_blocks.length}`);
 }
 const owned = (index.source_ownership || []).filter(page => (page.source_patterns || []).length > 0);
 if (owned.length > 0) {
@@ -1008,6 +1073,7 @@ capture_docs_structure_guard_snapshot() {
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const childProcess = require('child_process');
 
 const manifestPath = process.argv[2];
 const snapshotFile = process.argv[3];
@@ -1054,32 +1120,73 @@ function sectionBodyDigest(content, section) {
   };
 }
 
-function walkMarkdown(dir) {
-  if (!fs.existsSync(dir)) return [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === '.vitepress') continue;
-      files.push(...walkMarkdown(entryPath));
-    } else if (entry.isFile() && entryPath.endsWith('.md')) {
-      files.push(entryPath.split(path.sep).join('/'));
-    }
+function trackedProjectFiles() {
+  try {
+    return childProcess
+      .execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .filter(file => !file.startsWith('.claudux/') && !file.includes('/node_modules/'))
+      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
+      .sort();
+  } catch {
+    return [];
   }
-  return files.sort();
 }
 
-function protectedBlocks(content) {
-  const blocks = [];
-  const marker = /<!--\s*skip\s*-->([\s\S]*?)<!--\s*\/skip\s*-->/g;
-  let match;
-  while ((match = marker.exec(content)) !== null) {
-    blocks.push({
-      sha256: sha256(match[0]),
-      preview: match[0].split(/\r?\n/).slice(0, 3).join('\\n'),
-    });
+function protectionMarkersFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase().replace(/^\./, '');
+  if (['md', 'markdown', 'html', 'xml', 'vue'].includes(ext)) {
+    return { start: '<!-- skip -->', end: '<!-- /skip -->' };
   }
+  if (['swift', 'js', 'ts', 'jsx', 'tsx', 'java', 'c', 'cpp', 'h', 'hpp', 'rs', 'go'].includes(ext)) {
+    return { start: '// skip', end: '// /skip' };
+  }
+  if (['py', 'sh', 'bash', 'zsh', 'rb', 'pl'].includes(ext)) {
+    return { start: '# skip', end: '# /skip' };
+  }
+  if (['css', 'scss', 'sass', 'less'].includes(ext)) {
+    return { start: '/* skip */', end: '/* /skip */' };
+  }
+  if (ext === 'sql') {
+    return { start: '-- skip', end: '-- /skip' };
+  }
+  return { start: '# skip', end: '# /skip' };
+}
+
+function protectedBlocksForFile(filePath) {
+  const markers = protectionMarkersFor(filePath);
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  const blocks = [];
+  let active = false;
+  let startLine = 0;
+  let blockLines = [];
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!active && trimmed === markers.start) {
+      active = true;
+      startLine = index + 1;
+      blockLines = [line];
+      return;
+    }
+    if (!active) return;
+
+    blockLines.push(line);
+    if (trimmed === markers.end) {
+      blocks.push({
+        sha256: sha256(blockLines.join('\n')),
+        start_marker: markers.start,
+        end_marker: markers.end,
+        start_line: startLine,
+        end_line: index + 1,
+        preview: blockLines.slice(0, 3).join('\\n'),
+      });
+      active = false;
+      blockLines = [];
+    }
+  });
+
   return blocks;
 }
 
@@ -1116,10 +1223,10 @@ if (manifest && Array.isArray(manifest.pages)) {
   }
 }
 
-const protectedFiles = walkMarkdown('docs')
+const protectedFiles = trackedProjectFiles()
   .map(file => ({
     path: file,
-    blocks: protectedBlocks(fs.readFileSync(file, 'utf8')),
+    blocks: protectedBlocksForFile(file),
   }))
   .filter(file => file.blocks.length > 0);
 
@@ -1202,13 +1309,31 @@ function sectionBodyDigest(content, section) {
   };
 }
 
-function protectedBlocks(content) {
+function protectedBlocks(content, markerSource = {}) {
+  const startMarker = markerSource.start_marker || '<!-- skip -->';
+  const endMarker = markerSource.end_marker || '<!-- /skip -->';
+  const lines = content.split(/\r?\n/);
   const blocks = [];
-  const marker = /<!--\s*skip\s*-->([\s\S]*?)<!--\s*\/skip\s*-->/g;
-  let match;
-  while ((match = marker.exec(content)) !== null) {
-    blocks.push({ sha256: sha256(match[0]) });
+  let active = false;
+  let blockLines = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!active && trimmed === startMarker) {
+      active = true;
+      blockLines = [line];
+      continue;
+    }
+    if (!active) continue;
+
+    blockLines.push(line);
+    if (trimmed === endMarker) {
+      blocks.push({ sha256: sha256(blockLines.join('\n')) });
+      active = false;
+      blockLines = [];
+    }
   }
+
   return blocks;
 }
 
@@ -1253,7 +1378,7 @@ for (const file of snapshot.protected_files || []) {
     fail(`protected file disappeared after generation (${file.path})`);
     continue;
   }
-  const currentBlocks = protectedBlocks(fs.readFileSync(file.path, 'utf8'));
+  const currentBlocks = protectedBlocks(fs.readFileSync(file.path, 'utf8'), (file.blocks || [])[0] || {});
   if (currentBlocks.length < file.blocks.length) {
     fail(`${file.path}: protected skip block count decreased`);
     continue;

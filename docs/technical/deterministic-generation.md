@@ -134,7 +134,13 @@ Blocked:
 - Moving a pinned section to another page without a manifest diff.
 - Replacing the entire docs tree with a newly inferred information architecture.
 
-This complements skip markers from `lib/content-protection.sh`. Skip markers protect local content regions. Pinned manifest sections protect documentation structure.
+This complements skip markers from `lib/content-protection.sh`. Skip markers protect local content regions with language-aware marker pairs such as `<!-- skip -->`, `// skip`, `# skip`, `/* skip */`, and `-- skip`. Pinned manifest sections protect documentation structure.
+
+## Content Protection Markers
+
+`lib/content-protection.sh` defines the marker pair for each supported file type. The static index records protected blocks from tracked source and docs files before a model runs, and the guard snapshot validates those block hashes after generation.
+
+Marker matching is literal and line-based. This keeps regex-looking markers such as `/* skip */` deterministic and prevents a model from changing source-owned doctrine inside skip blocks while leaving the surrounding file shape intact.
 
 ## Dependency-Aware Scope
 
@@ -164,7 +170,7 @@ The guard snapshot adds the preservation check that schema validation cannot pro
 
 - Pinned headings must remain in manifest order within their page.
 - Pinned/read-only section bodies must keep the same hash unless `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` is set for an intentional human override.
-- Existing `<!-- skip -->` blocks must keep the same content hash.
+- Existing skip-marker blocks must keep the same content hash, including language-specific blocks in source-owned files.
 - A model can still improve generated prose, but it cannot erase hand-written doctrine behind skip markers and pass validation.
 
 `claudux validate` runs manifest validation before link validation. `claudux update` runs it before model invocation and again after model writes.

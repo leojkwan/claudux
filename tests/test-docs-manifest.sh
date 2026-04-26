@@ -19,7 +19,7 @@ setup_manifest_repo() {
         git init -q
         git config user.email "test@test.com"
         git config user.name "Test"
-        mkdir -p bin docs/api docs/guide docs/technical lib tests
+        mkdir -p bin docs/api docs/guide docs/technical lib src tests
         printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n\n## Unrelated Generated\n\nUnrelated body.\n' > docs/technical/deterministic-generation.md
         printf '# API\n\nDocumented commands.\n' > docs/api/index.md
         printf '# Guide\n\n[Commands](/guide/commands)\n' > docs/guide/index.md
@@ -29,6 +29,8 @@ setup_manifest_repo() {
         printf '#!/bin/bash\nupdate() { :; }\n' > lib/docs-generation.sh
         printf '#!/bin/bash\nvalidate_docs_structure_manifest() { :; }\n' > lib/docs-manifest.sh
         printf '#!/bin/bash\nshow_help() { :; }\n' > lib/ui.sh
+        printf 'export const publicValue = 1;\n\n// skip\nconst sourceOwnedSecret = "do-not-document";\n// /skip\n\nexport const laterValue = 2;\n' > src/protected.ts
+        printf '.public { color: red; }\n\n/* skip */\n.secret { token: "do-not-document"; }\n/* /skip */\n\n.card { color: blue; }\n' > src/protected.css
         printf '#!/bin/bash\nsource "$SCRIPT_DIR/test-harness.sh"\n' > tests/run-all.sh
         printf '#!/bin/bash\nassert_contains() { :; }\n' > tests/test-harness.sh
         printf '{"scripts":{"test":"bash tests/run-all.sh"}}\n' > package.json
@@ -85,7 +87,7 @@ setup_manifest_repo() {
             '    }' \
             '  ]' \
             '}' > docs-structure.json
-        git add docs-structure.json docs/technical/deterministic-generation.md docs/api/index.md docs/guide/index.md docs/guide/commands.md docs/manual.md bin/claudux lib/docs-generation.sh lib/docs-manifest.sh lib/ui.sh tests/run-all.sh tests/test-harness.sh package.json
+        git add docs-structure.json docs/technical/deterministic-generation.md docs/api/index.md docs/guide/index.md docs/guide/commands.md docs/manual.md bin/claudux lib/docs-generation.sh lib/docs-manifest.sh lib/ui.sh src/protected.ts src/protected.css tests/run-all.sh tests/test-harness.sh package.json
     )
     echo "$dir"
 }
@@ -142,6 +144,8 @@ console.log(`commands=${(index.cli_commands || []).join(',')}`);
 console.log(`exports=${(index.exported_symbols || []).some(symbol => symbol.file === 'lib/ui.sh' && symbol.name === 'show_help')}`);
 console.log(`tests=${(index.tests || []).some(test => test.path === 'tests/run-all.sh')}`);
 console.log(`link=${(index.docs_links || []).some(link => link.from === 'docs/guide/index.md' && link.to === 'docs/guide/commands.md')}`);
+console.log(`protected-ts=${(index.protected_blocks || []).some(block => block.path === 'src/protected.ts' && block.start_marker === '// skip')}`);
+console.log(`protected-css=${(index.protected_blocks || []).some(block => block.path === 'src/protected.css' && block.start_marker === '/* skip */')}`);
 NODE
 ) > /tmp/claudux-manifest-t4 2>&1
 assert_contains "static index captures deterministic facts" "$(cat /tmp/claudux-manifest-t4)" "test"
@@ -150,6 +154,8 @@ assert_contains "static index captures CLI commands" "$(cat /tmp/claudux-manifes
 assert_contains "static index captures exported shell functions" "$(cat /tmp/claudux-manifest-t4)" "exports=true"
 assert_contains "static index captures test files" "$(cat /tmp/claudux-manifest-t4)" "tests=true"
 assert_contains "static index captures docs links" "$(cat /tmp/claudux-manifest-t4)" "link=true"
+assert_contains "static index captures slash protected blocks" "$(cat /tmp/claudux-manifest-t4)" "protected-ts=true"
+assert_contains "static index captures css protected blocks literally" "$(cat /tmp/claudux-manifest-t4)" "protected-css=true"
 rm -rf "$TEST_DIR"
 
 # --- Test 5: changed source files resolve to manifest-owned docs and reverse dependencies ---
@@ -215,6 +221,23 @@ TEST_DIR=$(setup_manifest_repo)
     fi
 ) > /tmp/claudux-manifest-t8 2>&1
 assert_contains "guard snapshot catches changed protected content" "$(cat /tmp/claudux-manifest-t8)" "protected skip block 1 changed"
+rm -rf "$TEST_DIR"
+
+# --- Test 8b: guard snapshot fails when source-language skip content changes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    capture_docs_structure_guard_snapshot >/tmp/claudux-manifest-t8b-output
+    printf 'export const publicValue = 1;\n\n// skip\nconst sourceOwnedSecret = "rewritten-generic-advice";\n// /skip\n\nexport const laterValue = 2;\n' > src/protected.ts
+    if validate_docs_structure_guard_snapshot >/tmp/claudux-manifest-t8b-validate 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t8b-validate
+    fi
+) > /tmp/claudux-manifest-t8b 2>&1
+assert_contains "guard snapshot catches source protected content" "$(cat /tmp/claudux-manifest-t8b)" "src/protected.ts: protected skip block 1 changed"
 rm -rf "$TEST_DIR"
 
 # --- Test 9: guard snapshot fails when pinned heading order changes ---
