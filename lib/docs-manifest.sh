@@ -54,6 +54,15 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function headingMatchCount(content, section) {
+  if (typeof section.heading !== 'string' || !Number.isInteger(section.level)) return 0;
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`,
+    'gm'
+  );
+  return [...content.matchAll(headingPattern)].length;
+}
+
 function validateSourcePatterns(patterns, label) {
   if (patterns === undefined) return false;
   if (!Array.isArray(patterns)) {
@@ -185,6 +194,7 @@ if (manifest) {
     }
 
     const sectionIds = new Set();
+    const sectionAnchors = new Set();
     for (const [sectionIndex, section] of (sections || []).entries()) {
       const sectionLabel = section?.id || `${label}.sections[${sectionIndex}]`;
       if (!isObject(section)) {
@@ -204,6 +214,14 @@ if (manifest) {
       if (!Number.isInteger(section.level) || section.level < 1 || section.level > 6) {
         fail(`${sectionLabel}: level must be an integer from 1 to 6`);
       }
+      if (typeof section.heading === 'string' && Number.isInteger(section.level)) {
+        const anchorKey = `${section.level}\0${section.heading}`;
+        if (sectionAnchors.has(anchorKey)) {
+          fail(`${sectionLabel}: duplicate section heading anchor h${section.level} "${section.heading}"`);
+        } else {
+          sectionAnchors.add(anchorKey);
+        }
+      }
       validateSourcePatterns(section.source_patterns, sectionLabel);
       if (section.pinned === true) pinnedSections += 1;
     }
@@ -212,12 +230,12 @@ if (manifest) {
       const content = fs.readFileSync(page.path, 'utf8');
       for (const section of sections || []) {
         if (!section.heading || !section.level) continue;
+        const headingCount = headingMatchCount(content, section);
+        if (headingCount > 1) {
+          fail(`${label}: duplicate manifest heading anchor h${section.level} "${section.heading}" in ${page.path}`);
+        }
         if (section.required === false && section.pinned !== true) continue;
-        const headingPattern = new RegExp(
-          `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`,
-          'm'
-        );
-        if (!headingPattern.test(content)) {
+        if (headingCount === 0) {
           fail(`${label}: missing required heading "${section.heading}" in ${page.path}`);
         }
       }

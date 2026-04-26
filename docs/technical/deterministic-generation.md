@@ -54,6 +54,7 @@ Claudux then applies the patch itself:
 
 - The page ID and section ID must exist in `docs-structure.json`.
 - The target page must already exist on disk.
+- The target section's heading anchor is unambiguous: one `level + heading` pair per manifest page and one matching heading on disk.
 - The patch replaces only the body under that manifest heading, ending before the next same-or-higher-level heading.
 - The whole patch batch validates before any file is written; one invalid patch leaves every doc file unchanged.
 - Patch bodies may include deeper subheadings, but same-or-higher-level headings are rejected because they would escape the bounded section.
@@ -156,8 +157,8 @@ That distinction matters on large codebases where one source file has known depe
 
 Manifest validation has two modes:
 
-- Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, and section IDs.
-- Post-generation also verifies every manifest page exists and every required or pinned heading still appears on disk.
+- Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, section IDs, and unambiguous section `level + heading` anchors.
+- Post-generation also verifies every manifest page exists, every required or pinned heading still appears on disk, and every manifest section heading appears at most once at its declared level.
 
 The guard snapshot adds the preservation check that schema validation cannot prove by itself:
 

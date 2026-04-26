@@ -504,6 +504,41 @@ assert_contains "duplicate navigation order fails validation" "$(cat /tmp/claudu
 assert_contains "duplicate page order fails validation" "$(cat /tmp/claudux-manifest-t20)" "duplicate page order 110"
 rm -rf "$TEST_DIR"
 
+# --- Test 21: manifest section heading anchors must stay unambiguous ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.pages[0].sections[1].heading = manifest.pages[0].sections[0].heading;
+manifest.pages[0].sections[1].level = manifest.pages[0].sections[0].level;
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t21-schema-output 2>&1; then
+        echo "unexpected-schema-pass"
+    else
+        cat /tmp/claudux-manifest-t21-schema-output
+    fi
+) > /tmp/claudux-manifest-t21-schema 2>&1
+assert_contains "duplicate manifest section anchor fails validation" "$(cat /tmp/claudux-manifest-t21-schema)" 'duplicate section heading anchor h2 "Pipeline"'
+rm -rf "$TEST_DIR"
+
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    printf '\n## Generated Details\n\nAmbiguous generated body.\n' >> docs/technical/deterministic-generation.md
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest --post-generation >/tmp/claudux-manifest-t21-disk-output 2>&1; then
+        echo "unexpected-disk-pass"
+    else
+        cat /tmp/claudux-manifest-t21-disk-output
+    fi
+) > /tmp/claudux-manifest-t21-disk 2>&1
+assert_contains "duplicate on-disk section anchor fails post-generation validation" "$(cat /tmp/claudux-manifest-t21-disk)" 'duplicate manifest heading anchor h2 "Generated Details"'
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
@@ -517,6 +552,7 @@ rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
 rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output
+rm -f /tmp/claudux-manifest-t21-schema /tmp/claudux-manifest-t21-schema-output /tmp/claudux-manifest-t21-disk /tmp/claudux-manifest-t21-disk-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 
