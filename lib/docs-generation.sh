@@ -631,7 +631,11 @@ $prompt"
             file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
             local impacted_docs=""
             if declare -F resolve_impacted_docs_from_changed_files >/dev/null 2>&1; then
-                impacted_docs=$(CLAUDUX_CHANGED_FILES="$changed_files" resolve_impacted_docs_from_changed_files 2>/dev/null || true)
+                local impact_allowlist_file="${CLAUDUX_IMPACT_ALLOWLIST_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/impacted-docs.json}"
+                impacted_docs=$(CLAUDUX_CHANGED_FILES="$changed_files" CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file" resolve_impacted_docs_from_changed_files 2>/dev/null || true)
+                if [[ -f "$impact_allowlist_file" ]]; then
+                    export CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file"
+                fi
             fi
             local base_prompt="$prompt"
             prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.

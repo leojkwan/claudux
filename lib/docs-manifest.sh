@@ -701,11 +701,17 @@ const path = require('path');
 const manifestPath = process.argv[2];
 const patchPath = process.argv[3];
 const unlockPinned = process.env.CLAUDUX_UNLOCK_PINNED_SECTIONS === '1';
+const impactAllowlistPath = process.env.CLAUDUX_IMPACT_ALLOWLIST_FILE || '';
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const payload = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
 const patches = Array.isArray(payload) ? payload : payload.patches;
 const errors = [];
 const applied = [];
+let impactAllowlist = null;
+
+if (impactAllowlistPath && fs.existsSync(impactAllowlistPath)) {
+  impactAllowlist = JSON.parse(fs.readFileSync(impactAllowlistPath, 'utf8'));
+}
 
 function fail(message) {
   errors.push(`section patch: ${message}`);
@@ -741,6 +747,15 @@ function findSection(lines, section) {
   return { start, end };
 }
 
+function impactAllowlistAllows(page, section) {
+  if (!impactAllowlist) return true;
+  const pageIds = new Set((impactAllowlist.pages || []).map(item => item.page_id));
+  const sectionIds = new Set((impactAllowlist.sections || []).map(item => `${item.page_id}#${item.section_id}`));
+  if (sectionIds.has(`${page.id}#${section.id}`)) return true;
+  const sectionHasSourcePatterns = Array.isArray(section.source_patterns) && section.source_patterns.length > 0;
+  return !sectionHasSourcePatterns && pageIds.has(page.id);
+}
+
 if (!Array.isArray(patches)) {
   fail('payload must include a patches array');
 } else {
@@ -759,6 +774,11 @@ if (!Array.isArray(patches)) {
     const section = (page.sections || []).find(candidate => candidate.id === patch.section_id);
     if (!section) {
       fail(`patches[${index}] references unknown section_id "${patch.section_id}" on ${page.id}`);
+      continue;
+    }
+
+    if (!impactAllowlistAllows(page, section)) {
+      fail(`${page.id}#${section.id} is outside incremental impact allowlist`);
       continue;
     }
 
@@ -1059,6 +1079,7 @@ const fs = require('fs');
 const path = require('path');
 
 const manifestPath = process.argv[2];
+const allowlistPath = process.env.CLAUDUX_IMPACT_ALLOWLIST_FILE || '';
 const changedFiles = (process.env.CLAUDUX_CHANGED_FILES || '')
   .split(/\r?\n/)
   .map(file => file.trim())
@@ -1121,6 +1142,8 @@ function dependencyExpandedFiles(seedFiles) {
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const hits = [];
 const expanded = dependencyExpandedFiles(changedFiles);
+const pages = [];
+const sections = [];
 
 for (const note of expanded.notes) {
   hits.push(`dependency-expanded scope: ${note}`);
@@ -1130,6 +1153,11 @@ for (const page of manifest.pages || []) {
   const pagePatterns = page.source_patterns || [];
   const pageHits = expanded.files.filter(file => pagePatterns.some(pattern => matches(pattern, file)));
   if (pageHits.length > 0) {
+    pages.push({
+      page_id: page.id,
+      path: page.path,
+      matched_files: pageHits,
+    });
     hits.push(`${pageHits.join(', ')} -> ${page.id} (${page.path})`);
   }
 
@@ -1137,9 +1165,31 @@ for (const page of manifest.pages || []) {
     const sectionPatterns = section.source_patterns || [];
     const sectionHits = expanded.files.filter(file => sectionPatterns.some(pattern => matches(pattern, file)));
     if (sectionHits.length > 0) {
+      sections.push({
+        page_id: page.id,
+        section_id: section.id,
+        path: page.path,
+        heading: section.heading,
+        pinned: section.pinned === true,
+        matched_files: sectionHits,
+      });
       hits.push(`${sectionHits.join(', ')} -> ${page.id}#${section.id} (${page.path})`);
     }
   }
+}
+
+if (allowlistPath) {
+  const allowlist = {
+    version: 1,
+    generated_at: new Date().toISOString(),
+    changed_files: changedFiles,
+    expanded_files: expanded.files,
+    dependency_notes: expanded.notes,
+    pages,
+    sections,
+  };
+  fs.mkdirSync(path.dirname(allowlistPath), { recursive: true });
+  fs.writeFileSync(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`);
 }
 
 for (const hit of [...new Set(hits)]) {

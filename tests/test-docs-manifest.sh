@@ -20,7 +20,7 @@ setup_manifest_repo() {
         git config user.email "test@test.com"
         git config user.name "Test"
         mkdir -p bin docs/api docs/guide docs/technical lib tests
-        printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n' > docs/technical/deterministic-generation.md
+        printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n\n## Unrelated Generated\n\nUnrelated body.\n' > docs/technical/deterministic-generation.md
         printf '# API\n\nDocumented commands.\n' > docs/api/index.md
         printf '# Guide\n\n[Commands](/guide/commands)\n' > docs/guide/index.md
         printf '# Commands\n\nCommand reference.\n' > docs/guide/commands.md
@@ -61,6 +61,12 @@ setup_manifest_repo() {
             '          "heading": "Generated Details",' \
             '          "level": 2,' \
             '          "source_patterns": ["lib/docs-manifest.sh"]' \
+            '        },' \
+            '        {' \
+            '          "id": "unrelated-generated",' \
+            '          "heading": "Unrelated Generated",' \
+            '          "level": 2,' \
+            '          "source_patterns": ["README.md"]' \
             '        }' \
             '      ]' \
             '    },' \
@@ -296,14 +302,58 @@ NODE
 assert_contains "section patch extraction captures payload" "$(cat /tmp/claudux-manifest-t13)" "1:generated-details:Extracted body."
 rm -rf "$TEST_DIR"
 
+# --- Test 14: incremental impact allowlist blocks unrelated generated sections ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    build_static_analysis_index >/tmp/claudux-manifest-t14-index
+    CLAUDUX_CHANGED_FILES=$'lib/docs-manifest.sh' CLAUDUX_IMPACT_ALLOWLIST_FILE=/tmp/claudux-manifest-t14-allowlist.json resolve_impacted_docs_from_changed_files >/tmp/claudux-manifest-t14-impact
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "Allowed incremental body."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t14-allowed.json
+    CLAUDUX_IMPACT_ALLOWLIST_FILE=/tmp/claudux-manifest-t14-allowlist.json apply_manifest_section_patches /tmp/claudux-section-patches-t14-allowed.json
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "unrelated-generated",' \
+        '      "body_markdown": "Out of scope body."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t14-blocked.json
+    if CLAUDUX_IMPACT_ALLOWLIST_FILE=/tmp/claudux-manifest-t14-allowlist.json apply_manifest_section_patches /tmp/claudux-section-patches-t14-blocked.json >/tmp/claudux-manifest-t14-blocked 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t14-blocked
+    fi
+    unset CLAUDUX_IMPACT_ALLOWLIST_FILE
+    apply_manifest_section_patches /tmp/claudux-section-patches-t14-blocked.json
+    cat docs/technical/deterministic-generation.md
+) > /tmp/claudux-manifest-t14 2>&1
+assert_contains "impact allowlist records section" "$(cat /tmp/claudux-manifest-t14-impact)" "lib/docs-manifest.sh -> technical.deterministic-generation#generated-details"
+assert_contains "incremental allowlist permits impacted section" "$(cat /tmp/claudux-manifest-t14)" "Allowed incremental body."
+assert_contains "incremental allowlist blocks unrelated section" "$(cat /tmp/claudux-manifest-t14)" "outside incremental impact allowlist"
+assert_contains "full scan still allows generated section" "$(cat /tmp/claudux-manifest-t14)" "Out of scope body."
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
-rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13
+rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13 /tmp/claudux-manifest-t14
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
 rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
-rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json
+rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
+rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 
 test_summary

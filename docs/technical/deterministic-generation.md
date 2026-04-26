@@ -26,9 +26,9 @@ The deterministic pipeline is:
 3. Capture a guard snapshot for pinned heading order and protected skip-marker blocks.
 4. Add the static index summary to the model prompt as authoritative facts.
 5. Use `.claudux-state.json` to find changed files since the previous run.
-6. Resolve changed files through manifest `source_patterns` to the impacted page or section set.
+6. Resolve changed files through manifest `source_patterns` to the impacted page or section set and write `.claudux/index/impacted-docs.json`.
 7. Ask the model for section patch JSON instead of direct documentation writes.
-8. Apply patches only to manifest-owned generated sections.
+8. Apply patches only to manifest-owned generated sections inside the impacted allowlist during incremental runs.
 9. Validate `docs-structure.json` again after generation.
 10. Validate the guard snapshot, internal links, and save the checkpoint.
 
@@ -55,6 +55,7 @@ Claudux then applies the patch itself:
 - The page ID and section ID must exist in `docs-structure.json`.
 - The target page must already exist on disk.
 - The patch replaces only the body under that manifest heading, ending before the next same-or-higher-level heading.
+- Incremental runs reject patches outside `.claudux/index/impacted-docs.json`; full scans keep the wider manifest-generated section contract.
 - Pinned sections are rejected unless the human explicitly runs with `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` and the patch sets `unlock_pinned: true`.
 - Claude runs with only the `Read` tool in patch mode.
 - Codex runs with a read-only sandbox in patch mode.
@@ -145,7 +146,9 @@ lib/ui.sh -> bin/claudux [shell-source]
 bin/claudux -> api.index (docs/api/index.md)
 ```
 
-The model still sees the changed file list, but it also gets the manifest-owned impact set. That distinction matters on large codebases where one source file has known dependents and hundreds of unrelated docs should stay untouched.
+The model still sees the changed file list, but it also gets the manifest-owned impact set. Claudux also writes that impact set to `.claudux/index/impacted-docs.json` and uses it as a patch allowlist. Sections with their own `source_patterns` must be directly impacted; sections without their own ownership can be patched when their page is impacted.
+
+That distinction matters on large codebases where one source file has known dependents and hundreds of unrelated docs should stay untouched.
 
 ## Validators
 
