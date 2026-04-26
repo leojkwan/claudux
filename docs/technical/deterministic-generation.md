@@ -88,6 +88,8 @@ Each run records:
 
 This gives the prompt a stable fact table before any model output. A large repo can change thousands of files, but claudux can still start from sorted paths and hashes instead of asking the model to rediscover the project from a blank scan.
 
+The deterministic cache deliberately omits wall-clock `generated_at` fields. Run time belongs in `.claudux-state.json`; the static index, guard snapshot, and impacted-docs allowlist should be byte-stable when inputs are unchanged.
+
 ## docs-structure.json Manifest
 
 The manifest owns structure with fields that are easy to review:

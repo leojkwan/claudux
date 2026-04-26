@@ -586,7 +586,6 @@ const protectedBlockFacts = [...new Set([...sourceFiles, ...docsFiles])]
 
 const index = {
   version: 1,
-  generated_at: new Date().toISOString(),
   head_sha: headSha,
   manifest: manifest
     ? {
@@ -1264,7 +1263,6 @@ const protectedFiles = trackedProjectFiles()
 
 const snapshot = {
   version: 1,
-  generated_at: new Date().toISOString(),
   manifest_path: fs.existsSync(manifestPath) ? manifestPath : null,
   pinned_pages: pinnedPages,
   protected_files: protectedFiles,
@@ -1549,7 +1547,6 @@ for (const page of manifest.pages || []) {
 if (allowlistPath) {
   const allowlist = {
     version: 1,
-    generated_at: new Date().toISOString(),
     changed_files: changedFiles,
     expanded_files: expanded.files,
     dependency_notes: expanded.notes,

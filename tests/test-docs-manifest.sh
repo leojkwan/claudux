@@ -174,6 +174,48 @@ assert_contains "dependency expansion reports edge" "$(cat /tmp/claudux-manifest
 assert_contains "dependency-expanded file maps to page" "$(cat /tmp/claudux-manifest-t5)" "bin/claudux -> api.index"
 rm -rf "$TEST_DIR"
 
+# --- Test 5b: deterministic cache artifacts are byte-stable for identical inputs ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_INDEX_DIR="$TEST_DIR/.claudux/index"
+    CLAUDUX_STATIC_INDEX_FILE="$TEST_DIR/.claudux/index/static-analysis.json"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    CLAUDUX_IMPACT_ALLOWLIST_FILE="$TEST_DIR/.claudux/index/impacted-docs.json"
+
+    build_static_analysis_index >/dev/null
+    capture_docs_structure_guard_snapshot >/dev/null
+    CLAUDUX_CHANGED_FILES=$'lib/docs-manifest.sh\nREADME.md' CLAUDUX_IMPACT_ALLOWLIST_FILE="$CLAUDUX_IMPACT_ALLOWLIST_FILE" resolve_impacted_docs_from_changed_files >/dev/null
+    cp "$CLAUDUX_STATIC_INDEX_FILE" /tmp/claudux-manifest-t5b-static-first.json
+    cp "$CLAUDUX_GUARD_SNAPSHOT_FILE" /tmp/claudux-manifest-t5b-guard-first.json
+    cp "$CLAUDUX_IMPACT_ALLOWLIST_FILE" /tmp/claudux-manifest-t5b-impact-first.json
+
+    sleep 1
+
+    build_static_analysis_index >/dev/null
+    capture_docs_structure_guard_snapshot >/dev/null
+    CLAUDUX_CHANGED_FILES=$'lib/docs-manifest.sh\nREADME.md' CLAUDUX_IMPACT_ALLOWLIST_FILE="$CLAUDUX_IMPACT_ALLOWLIST_FILE" resolve_impacted_docs_from_changed_files >/dev/null
+
+    cmp -s /tmp/claudux-manifest-t5b-static-first.json "$CLAUDUX_STATIC_INDEX_FILE" && echo "static-index-stable:true"
+    cmp -s /tmp/claudux-manifest-t5b-guard-first.json "$CLAUDUX_GUARD_SNAPSHOT_FILE" && echo "guard-snapshot-stable:true"
+    cmp -s /tmp/claudux-manifest-t5b-impact-first.json "$CLAUDUX_IMPACT_ALLOWLIST_FILE" && echo "impact-allowlist-stable:true"
+    node - "$CLAUDUX_STATIC_INDEX_FILE" "$CLAUDUX_GUARD_SNAPSHOT_FILE" "$CLAUDUX_IMPACT_ALLOWLIST_FILE" <<'NODE'
+const fs = require('fs');
+for (const file of process.argv.slice(2)) {
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  console.log(`${file.split('/').pop()}:generated_at=${Object.prototype.hasOwnProperty.call(data, 'generated_at')}`);
+}
+NODE
+) > /tmp/claudux-manifest-t5b 2>&1
+assert_contains "static index is reproducible" "$(cat /tmp/claudux-manifest-t5b)" "static-index-stable:true"
+assert_contains "guard snapshot is reproducible" "$(cat /tmp/claudux-manifest-t5b)" "guard-snapshot-stable:true"
+assert_contains "impact allowlist is reproducible" "$(cat /tmp/claudux-manifest-t5b)" "impact-allowlist-stable:true"
+assert_contains "static index omits wall-clock timestamp" "$(cat /tmp/claudux-manifest-t5b)" "static-analysis.json:generated_at=false"
+assert_contains "guard snapshot omits wall-clock timestamp" "$(cat /tmp/claudux-manifest-t5b)" "docs-guard-snapshot.json:generated_at=false"
+assert_contains "impact allowlist omits wall-clock timestamp" "$(cat /tmp/claudux-manifest-t5b)" "impacted-docs.json:generated_at=false"
+rm -rf "$TEST_DIR"
+
 # --- Test 6: duplicate page IDs fail schema validation ---
 TEST_DIR=$(setup_manifest_repo)
 (
@@ -630,6 +672,7 @@ rm -rf "$TEST_DIR"
 
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
+rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
 rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13 /tmp/claudux-manifest-t14
 rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16 /tmp/claudux-manifest-t17 /tmp/claudux-manifest-t18
