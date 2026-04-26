@@ -456,6 +456,10 @@ update() {
         build_static_analysis_index || error_exit "Static analysis index failed"
         static_index_context=$(format_static_analysis_index_context)
     fi
+
+    if declare -F capture_docs_structure_guard_snapshot >/dev/null 2>&1; then
+        capture_docs_structure_guard_snapshot || error_exit "Documentation guard snapshot failed"
+    fi
     
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
@@ -697,6 +701,10 @@ $base_prompt"
         
         if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
             validate_docs_structure_manifest --post-generation || error_exit "docs-structure.json validation failed after generation"
+        fi
+
+        if declare -F validate_docs_structure_guard_snapshot >/dev/null 2>&1; then
+            validate_docs_structure_guard_snapshot || error_exit "Protected documentation structure changed during generation"
         fi
 
         # Validate links in generated documentation

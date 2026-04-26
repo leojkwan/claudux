@@ -21,6 +21,7 @@ setup_manifest_repo() {
         git config user.name "Test"
         mkdir -p docs/technical lib tests
         printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n' > docs/technical/deterministic-generation.md
+        printf '# Manual Notes\n\n<!-- skip -->\nHand-written deployment doctrine.\n<!-- /skip -->\n' > docs/manual.md
         printf '#!/bin/bash\nupdate() { :; }\n' > lib/docs-generation.sh
         printf '#!/bin/bash\nvalidate_docs_structure_manifest() { :; }\n' > lib/docs-manifest.sh
         printf '{"scripts":{"test":"bash tests/run-all.sh"}}\n' > package.json
@@ -52,7 +53,7 @@ setup_manifest_repo() {
             '    }' \
             '  ]' \
             '}' > docs-structure.json
-        git add docs-structure.json docs/technical/deterministic-generation.md lib/docs-generation.sh lib/docs-manifest.sh package.json
+        git add docs-structure.json docs/technical/deterministic-generation.md docs/manual.md lib/docs-generation.sh lib/docs-manifest.sh package.json
     )
     echo "$dir"
 }
@@ -140,8 +141,57 @@ NODE
 assert_contains "duplicate page IDs fail validation" "$(cat /tmp/claudux-manifest-t6)" "duplicate page id"
 rm -rf "$TEST_DIR"
 
+# --- Test 7: guard snapshot passes when pinned headings and skip blocks survive ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    capture_docs_structure_guard_snapshot >/tmp/claudux-manifest-t7-output
+    validate_docs_structure_guard_snapshot
+) > /tmp/claudux-manifest-t7 2>&1
+assert_contains "guard snapshot validates unchanged docs" "$(cat /tmp/claudux-manifest-t7)" "[claudux:guard] ok"
+rm -rf "$TEST_DIR"
+
+# --- Test 8: guard snapshot fails when protected skip content changes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    capture_docs_structure_guard_snapshot >/tmp/claudux-manifest-t8-output
+    printf '# Manual Notes\n\n<!-- skip -->\nRewritten generic text.\n<!-- /skip -->\n' > docs/manual.md
+    if validate_docs_structure_guard_snapshot >/tmp/claudux-manifest-t8-validate 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t8-validate
+    fi
+) > /tmp/claudux-manifest-t8 2>&1
+assert_contains "guard snapshot catches changed protected content" "$(cat /tmp/claudux-manifest-t8)" "protected skip block 1 changed"
+rm -rf "$TEST_DIR"
+
+# --- Test 9: guard snapshot fails when pinned heading order changes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    capture_docs_structure_guard_snapshot >/tmp/claudux-manifest-t9-output
+    printf '# Deterministic Generation\n\n## StrongYes Harness Example\n\nBody.\n\n## Pipeline\n\nBody.\n' > docs/technical/deterministic-generation.md
+    if validate_docs_structure_guard_snapshot >/tmp/claudux-manifest-t9-validate 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t9-validate
+    fi
+) > /tmp/claudux-manifest-t9 2>&1
+assert_contains "guard snapshot catches pinned heading reorder" "$(cat /tmp/claudux-manifest-t9)" "pinned heading order changed"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
+rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
+rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
+rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 
 test_summary

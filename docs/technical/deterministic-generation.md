@@ -23,12 +23,13 @@ The deterministic pipeline is:
 
 1. Validate `docs-structure.json` before generation.
 2. Build `.claudux/index/static-analysis.json` from tracked source files, docs files, package scripts, markdown headings, and manifest ownership.
-3. Add the static index summary to the model prompt as authoritative facts.
-4. Use `.claudux-state.json` to find changed files since the previous run.
-5. Resolve changed files through manifest `source_patterns` to the impacted page or section set.
-6. Let the model update only the relevant documentation surface.
-7. Validate `docs-structure.json` again after generation.
-8. Validate internal links and save the checkpoint.
+3. Capture a guard snapshot for pinned heading order and protected skip-marker blocks.
+4. Add the static index summary to the model prompt as authoritative facts.
+5. Use `.claudux-state.json` to find changed files since the previous run.
+6. Resolve changed files through manifest `source_patterns` to the impacted page or section set.
+7. Let the model update only the relevant documentation surface.
+8. Validate `docs-structure.json` again after generation.
+9. Validate the guard snapshot, internal links, and save the checkpoint.
 
 The current implementation still allows whole-file writes because the model backends write through Claude Code or Codex. The contract now makes those writes auditable. The next hardening step is section-level patch application keyed by manifest section IDs.
 
@@ -117,6 +118,12 @@ Manifest validation has two modes:
 
 - Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deletion policy, and section IDs.
 - Post-generation also verifies every manifest page exists and every required or pinned heading still appears on disk.
+
+The guard snapshot adds the preservation check that schema validation cannot prove by itself:
+
+- Pinned headings must remain in manifest order within their page.
+- Existing `<!-- skip -->` blocks must keep the same content hash.
+- A model can still improve generated prose, but it cannot erase hand-written doctrine behind skip markers and pass validation.
 
 `claudux validate` runs manifest validation before link validation. `claudux update` runs it before model invocation and again after model writes.
 

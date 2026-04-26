@@ -4,6 +4,7 @@
 DOCS_STRUCTURE_FILE="${DOCS_STRUCTURE_FILE:-docs-structure.json}"
 CLAUDUX_INDEX_DIR="${CLAUDUX_INDEX_DIR:-.claudux/index}"
 CLAUDUX_STATIC_INDEX_FILE="${CLAUDUX_STATIC_INDEX_FILE:-$CLAUDUX_INDEX_DIR/static-analysis.json}"
+CLAUDUX_GUARD_SNAPSHOT_FILE="${CLAUDUX_GUARD_SNAPSHOT_FILE:-$CLAUDUX_INDEX_DIR/docs-guard-snapshot.json}"
 
 docs_structure_path() {
     echo "${CLAUDUX_DOCS_STRUCTURE:-$DOCS_STRUCTURE_FILE}"
@@ -352,6 +353,227 @@ if (owned.length > 0) {
   }
 }
 console.log('- Generation rule: preserve manifest page IDs, nav order, deletion_policy, and pinned sections unless docs-structure.json changes first.');
+NODE
+}
+
+capture_docs_structure_guard_snapshot() {
+    local manifest snapshot_file snapshot_dir
+    manifest="$(docs_structure_path)"
+    snapshot_file="${CLAUDUX_GUARD_SNAPSHOT_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/docs-guard-snapshot.json}"
+    snapshot_dir="$(dirname "$snapshot_file")"
+
+    require_node_for_manifest || return 1
+    mkdir -p "$snapshot_dir" || return 1
+
+    node - "$manifest" "$snapshot_file" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const manifestPath = process.argv[2];
+const snapshotFile = process.argv[3];
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findHeading(content, section) {
+  const pattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`,
+    'm'
+  );
+  const match = pattern.exec(content);
+  if (!match) return null;
+  return content.slice(0, match.index).split(/\r?\n/).length;
+}
+
+function walkMarkdown(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '.vitepress') continue;
+      files.push(...walkMarkdown(entryPath));
+    } else if (entry.isFile() && entryPath.endsWith('.md')) {
+      files.push(entryPath.split(path.sep).join('/'));
+    }
+  }
+  return files.sort();
+}
+
+function protectedBlocks(content) {
+  const blocks = [];
+  const marker = /<!--\s*skip\s*-->([\s\S]*?)<!--\s*\/skip\s*-->/g;
+  let match;
+  while ((match = marker.exec(content)) !== null) {
+    blocks.push({
+      sha256: sha256(match[0]),
+      preview: match[0].split(/\r?\n/).slice(0, 3).join('\\n'),
+    });
+  }
+  return blocks;
+}
+
+let manifest = null;
+if (fs.existsSync(manifestPath)) {
+  manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+}
+
+const pinnedPages = [];
+if (manifest && Array.isArray(manifest.pages)) {
+  for (const page of manifest.pages) {
+    if (!page.path || !fs.existsSync(page.path)) continue;
+    const content = fs.readFileSync(page.path, 'utf8');
+    const sections = (page.sections || [])
+      .filter(section => section && (section.pinned === true || section.required !== false))
+      .map(section => ({
+        id: section.id,
+        heading: section.heading,
+        level: section.level,
+        line: findHeading(content, section),
+      }));
+    if (sections.length > 0) {
+      pinnedPages.push({
+        page_id: page.id,
+        path: page.path,
+        sections,
+      });
+    }
+  }
+}
+
+const protectedFiles = walkMarkdown('docs')
+  .map(file => ({
+    path: file,
+    blocks: protectedBlocks(fs.readFileSync(file, 'utf8')),
+  }))
+  .filter(file => file.blocks.length > 0);
+
+const snapshot = {
+  version: 1,
+  generated_at: new Date().toISOString(),
+  manifest_path: fs.existsSync(manifestPath) ? manifestPath : null,
+  pinned_pages: pinnedPages,
+  protected_files: protectedFiles,
+};
+
+fs.mkdirSync(path.dirname(snapshotFile), { recursive: true });
+fs.writeFileSync(snapshotFile, `${JSON.stringify(snapshot, null, 2)}\n`);
+console.log(
+  `[claudux:guard] wrote ${snapshotFile} (${pinnedPages.length} pinned pages, ${protectedFiles.length} protected files)`
+);
+NODE
+}
+
+validate_docs_structure_guard_snapshot() {
+    local snapshot_file
+    snapshot_file="${CLAUDUX_GUARD_SNAPSHOT_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/docs-guard-snapshot.json}"
+
+    if [[ ! -f "$snapshot_file" ]]; then
+        return 0
+    fi
+
+    require_node_for_manifest || return 1
+
+    node - "$snapshot_file" <<'NODE'
+const fs = require('fs');
+const crypto = require('crypto');
+
+const snapshotPath = process.argv[2];
+const errors = [];
+
+function fail(message) {
+  errors.push(`docs guard: ${message}`);
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findHeading(content, section) {
+  const pattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`,
+    'm'
+  );
+  const match = pattern.exec(content);
+  if (!match) return null;
+  return content.slice(0, match.index).split(/\r?\n/).length;
+}
+
+function protectedBlocks(content) {
+  const blocks = [];
+  const marker = /<!--\s*skip\s*-->([\s\S]*?)<!--\s*\/skip\s*-->/g;
+  let match;
+  while ((match = marker.exec(content)) !== null) {
+    blocks.push({ sha256: sha256(match[0]) });
+  }
+  return blocks;
+}
+
+let snapshot;
+try {
+  snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+} catch (error) {
+  fail(`invalid snapshot JSON (${error.message})`);
+  snapshot = {};
+}
+
+for (const page of snapshot.pinned_pages || []) {
+  if (!fs.existsSync(page.path)) {
+    fail(`manifest page disappeared after generation (${page.path})`);
+    continue;
+  }
+  const content = fs.readFileSync(page.path, 'utf8');
+  let previousLine = 0;
+  for (const section of page.sections || []) {
+    if (section.line === null) continue;
+    const currentLine = findHeading(content, section);
+    if (currentLine === null) {
+      fail(`${page.path}: pinned heading disappeared (${section.heading})`);
+      continue;
+    }
+    if (currentLine < previousLine) {
+      fail(`${page.path}: pinned heading order changed near "${section.heading}"`);
+    }
+    previousLine = currentLine;
+  }
+}
+
+for (const file of snapshot.protected_files || []) {
+  if (!fs.existsSync(file.path)) {
+    fail(`protected file disappeared after generation (${file.path})`);
+    continue;
+  }
+  const currentBlocks = protectedBlocks(fs.readFileSync(file.path, 'utf8'));
+  if (currentBlocks.length < file.blocks.length) {
+    fail(`${file.path}: protected skip block count decreased`);
+    continue;
+  }
+  for (const [index, block] of (file.blocks || []).entries()) {
+    if (!currentBlocks[index] || currentBlocks[index].sha256 !== block.sha256) {
+      fail(`${file.path}: protected skip block ${index + 1} changed`);
+    }
+  }
+}
+
+if (errors.length > 0) {
+  for (const error of errors) console.error(`[claudux:guard] ${error}`);
+  process.exit(1);
+}
+
+console.log(
+  `[claudux:guard] ok (${(snapshot.pinned_pages || []).length} pinned pages, ${(snapshot.protected_files || []).length} protected files)`
+);
 NODE
 }
 
