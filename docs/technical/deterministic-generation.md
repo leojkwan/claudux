@@ -15,7 +15,7 @@ Large repos rarely fail because the model cannot write a page. They fail because
 - Pinned sections are not deleted or reparented by a model-only run.
 - Deletion policy is reviewed as a manifest diff, not inferred from prose.
 
-The manifest is intentionally separate from `claudux.md`. `claudux.md` describes site taste. `docs-structure.json` is operational state.
+The manifest is intentionally separate from `claudux.md`. `claudux.md` describes site taste. `docs-structure.json` is operational state. If a legacy `docs-map.md` also exists, claudux treats it as supplemental guidance; the manifest remains the binding authority.
 
 ## Pipeline
 

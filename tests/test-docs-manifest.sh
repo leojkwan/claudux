@@ -592,6 +592,20 @@ TEST_DIR=$(setup_manifest_repo)
 assert_contains "duplicate on-disk section anchor fails post-generation validation" "$(cat /tmp/claudux-manifest-t21-disk)" 'duplicate manifest heading anchor h2 "Generated Details"'
 rm -rf "$TEST_DIR"
 
+# --- Test 22: docs-structure.json takes prompt precedence over legacy docs-map.md ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    printf '# Legacy Docs Map\n\nLoose advisory structure.\n' > docs-map.md
+    source "$LIB_DIR/docs-manifest.sh"
+    source "$LIB_DIR/docs-generation.sh"
+    build_generation_prompt "generic" "Prompt Precedence Test"
+) > /tmp/claudux-manifest-t22 2>&1
+assert_contains "prompt reads docs-structure as deterministic manifest when docs-map also exists" "$(cat /tmp/claudux-manifest-t22)" "Read docs-structure.json as the deterministic docs manifest"
+assert_contains "prompt keeps docs-map as supplemental legacy guidance" "$(cat /tmp/claudux-manifest-t22)" "Read docs-map.md as supplemental legacy guidance only"
+assert_not_contains "prompt does not demote docs-map to primary loose guidance" "$(cat /tmp/claudux-manifest-t22)" "Read docs-map.md for loose documentation guidance"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
@@ -608,6 +622,7 @@ rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/clau
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
 rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output
 rm -f /tmp/claudux-manifest-t21-schema /tmp/claudux-manifest-t21-schema-output /tmp/claudux-manifest-t21-disk /tmp/claudux-manifest-t21-disk-output
+rm -f /tmp/claudux-manifest-t22
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

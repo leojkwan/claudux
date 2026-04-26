@@ -309,13 +309,26 @@ build_generation_prompt() {
         template_config="$LIB_DIR/templates/generic/config.json"
     fi
     
-    # Documentation map / deterministic structure manifest
-    for mapfile in "docs-map.md" "docs-structure.json"; do
-        if [[ -f "$mapfile" ]]; then
-            docs_map="$mapfile"
-            break
-        fi
-    done
+    # Documentation map / deterministic structure manifest. Prefer the tracked
+    # manifest over legacy docs-map.md whenever both exist.
+    local docs_structure_manifest=""
+    local legacy_docs_map=""
+    if declare -F docs_structure_path >/dev/null 2>&1; then
+        docs_structure_manifest="$(docs_structure_path)"
+    else
+        docs_structure_manifest="docs-structure.json"
+    fi
+    if [[ ! -f "$docs_structure_manifest" ]]; then
+        docs_structure_manifest=""
+    fi
+    if [[ -f "docs-map.md" ]]; then
+        legacy_docs_map="docs-map.md"
+    fi
+    if [[ -n "$docs_structure_manifest" ]]; then
+        docs_map="$docs_structure_manifest"
+    elif [[ -n "$legacy_docs_map" ]]; then
+        docs_map="$legacy_docs_map"
+    fi
     
     # Project-specific coding patterns (CLAUDE.md)
     local claudux_patterns=""
@@ -344,12 +357,16 @@ build_generation_prompt() {
 - Read $style_guide for universal AI documentation principles"
     fi
     
-    if [[ "$docs_map" == "docs-structure.json" ]]; then
+    if [[ -n "$docs_structure_manifest" ]]; then
         prompt+="
 - Read $docs_map as the deterministic docs manifest: page IDs, paths, nav order, source ownership, required sections, pinned sections, and deletion_policy are binding inputs. Preserve them unless the manifest itself changes."
-    elif [[ -n "$docs_map" ]]; then
+        if [[ -n "$legacy_docs_map" ]]; then
+            prompt+="
+- Read $legacy_docs_map as supplemental legacy guidance only; if it conflicts with $docs_map, the deterministic manifest wins."
+        fi
+    elif [[ -n "$legacy_docs_map" ]]; then
         prompt+="
-- Read $docs_map for loose documentation guidance and protected areas"
+- Read $legacy_docs_map for loose documentation guidance and protected areas"
     fi
     
     if [[ -n "$claudux_patterns" ]]; then
