@@ -35,11 +35,16 @@ setup_manifest_repo() {
         printf '%s\n' \
             '{' \
             '  "version": 1,' \
+            '  "navigation": [' \
+            '    { "id": "technical", "title": "Technical", "link": "/technical/", "order": 1 },' \
+            '    { "id": "api", "title": "API", "link": "/api/", "order": 2 }' \
+            '  ],' \
             '  "pages": [' \
             '    {' \
             '      "id": "technical.deterministic-generation",' \
             '      "path": "docs/technical/deterministic-generation.md",' \
             '      "title": "Deterministic Generation",' \
+            '      "order": 110,' \
             '      "deletion_policy": "never_delete_without_manifest_change",' \
             '      "source_patterns": ["lib/docs-generation.sh", "lib/docs-manifest.sh"],' \
             '      "sections": [' \
@@ -74,6 +79,7 @@ setup_manifest_repo() {
             '      "id": "api.index",' \
             '      "path": "docs/api/index.md",' \
             '      "title": "API",' \
+            '      "order": 120,' \
             '      "deletion_policy": "never_delete_without_manifest_change",' \
             '      "source_patterns": ["bin/claudux"]' \
             '    }' \
@@ -435,6 +441,50 @@ assert_contains "recreate guard blocks manifest docs deletion" "$(cat /tmp/claud
 assert_contains "recreate guard preserves manifest page" "$(cat /tmp/claudux-manifest-t18)" "manifest-page-still-exists"
 rm -rf "$TEST_DIR"
 
+# --- Test 19: manifest rejects malformed source pattern entries before impact mapping ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.pages[0].source_patterns.push('');
+manifest.pages[0].sections[0].source_patterns.push(42);
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t19-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t19-output
+    fi
+) > /tmp/claudux-manifest-t19 2>&1
+assert_contains "empty source pattern fails validation" "$(cat /tmp/claudux-manifest-t19)" "source_patterns[2] must not be empty"
+assert_contains "non-string section source pattern fails validation" "$(cat /tmp/claudux-manifest-t19)" "source_patterns[1] must be a string"
+rm -rf "$TEST_DIR"
+
+# --- Test 20: manifest rejects duplicate deterministic order values ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.navigation[1].order = manifest.navigation[0].order;
+manifest.pages[1].order = manifest.pages[0].order;
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t20-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t20-output
+    fi
+) > /tmp/claudux-manifest-t20 2>&1
+assert_contains "duplicate navigation order fails validation" "$(cat /tmp/claudux-manifest-t20)" "duplicate navigation order 1"
+assert_contains "duplicate page order fails validation" "$(cat /tmp/claudux-manifest-t20)" "duplicate page order 110"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
@@ -446,6 +496,7 @@ rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
+rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

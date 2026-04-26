@@ -156,7 +156,7 @@ That distinction matters on large codebases where one source file has known depe
 
 Manifest validation has two modes:
 
-- Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deletion policy, and section IDs.
+- Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, and section IDs.
 - Post-generation also verifies every manifest page exists and every required or pinned heading still appears on disk.
 
 The guard snapshot adds the preservation check that schema validation cannot prove by itself:

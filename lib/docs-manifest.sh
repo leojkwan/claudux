@@ -54,6 +54,28 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function validateSourcePatterns(patterns, label) {
+  if (patterns === undefined) return false;
+  if (!Array.isArray(patterns)) {
+    fail(`${label}: source_patterns must be an array`);
+    return false;
+  }
+
+  let hasPatterns = false;
+  for (const [patternIndex, pattern] of patterns.entries()) {
+    if (typeof pattern !== 'string') {
+      fail(`${label}: source_patterns[${patternIndex}] must be a string`);
+      continue;
+    }
+    if (pattern.trim().length === 0) {
+      fail(`${label}: source_patterns[${patternIndex}] must not be empty`);
+      continue;
+    }
+    hasPatterns = true;
+  }
+  return hasPatterns;
+}
+
 let manifest;
 try {
   manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -71,8 +93,39 @@ if (manifest) {
 
   const pageIds = new Set();
   const pagePaths = new Set();
+  const pageOrders = new Set();
   let sourceOwnedPages = 0;
   let pinnedSections = 0;
+
+  if (manifest.navigation !== undefined) {
+    if (!Array.isArray(manifest.navigation)) {
+      fail('navigation must be an array');
+    } else {
+      const navIds = new Set();
+      const navOrders = new Set();
+      for (const [navIndex, item] of manifest.navigation.entries()) {
+        const label = item?.id || `navigation[${navIndex}]`;
+        if (!isObject(item)) {
+          fail(`navigation[${navIndex}] must be an object`);
+          continue;
+        }
+        if (!item.id || typeof item.id !== 'string') {
+          fail(`${label}: missing string id`);
+        } else if (navIds.has(item.id)) {
+          fail(`${label}: duplicate navigation id`);
+        } else {
+          navIds.add(item.id);
+        }
+        if (!Number.isInteger(item.order)) {
+          fail(`${label}: order must be an integer`);
+        } else if (navOrders.has(item.order)) {
+          fail(`${label}: duplicate navigation order ${item.order}`);
+        } else {
+          navOrders.add(item.order);
+        }
+      }
+    }
+  }
 
   for (const [pageIndex, page] of (manifest.pages || []).entries()) {
     const label = page?.id || `pages[${pageIndex}]`;
@@ -113,12 +166,16 @@ if (manifest) {
       fail(`${label}: missing string deletion_policy`);
     }
 
-    if (page.source_patterns !== undefined) {
-      if (!Array.isArray(page.source_patterns)) {
-        fail(`${label}: source_patterns must be an array`);
-      } else if (page.source_patterns.length > 0) {
-        sourceOwnedPages += 1;
-      }
+    if (!Number.isInteger(page.order)) {
+      fail(`${label}: order must be an integer`);
+    } else if (pageOrders.has(page.order)) {
+      fail(`${label}: duplicate page order ${page.order}`);
+    } else {
+      pageOrders.add(page.order);
+    }
+
+    if (validateSourcePatterns(page.source_patterns, label)) {
+      sourceOwnedPages += 1;
     }
 
     const sections = page.sections;
@@ -147,6 +204,7 @@ if (manifest) {
       if (!Number.isInteger(section.level) || section.level < 1 || section.level > 6) {
         fail(`${sectionLabel}: level must be an integer from 1 to 6`);
       }
+      validateSourcePatterns(section.source_patterns, sectionLabel);
       if (section.pinned === true) pinnedSections += 1;
     }
 
