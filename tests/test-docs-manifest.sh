@@ -406,17 +406,46 @@ assert_contains "section patcher preserves original body after boundary rejectio
 assert_not_contains "section patcher does not write escaping body" "$(cat /tmp/claudux-manifest-t16)" "This would become a sibling section."
 rm -rf "$TEST_DIR"
 
+# --- Test 17: cleanup refuses AI deletion when a manifest owns docs structure ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/colors.sh"
+    source "$LIB_DIR/docs-manifest.sh"
+    source "$LIB_DIR/cleanup.sh"
+    cleanup_docs
+    test -f docs/technical/deterministic-generation.md && echo "manifest-page-still-exists"
+) > /tmp/claudux-manifest-t17 2>&1
+assert_contains "cleanup guard blocks AI deletion with manifest" "$(cat /tmp/claudux-manifest-t17)" "Manifest deletion guard active"
+assert_contains "cleanup guard preserves manifest page" "$(cat /tmp/claudux-manifest-t17)" "manifest-page-still-exists"
+rm -rf "$TEST_DIR"
+
+# --- Test 18: recreate refuses to rm -rf manifest-owned docs by default ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    if bash -c "source '$LIB_DIR/colors.sh'; source '$LIB_DIR/docs-manifest.sh'; source '$LIB_DIR/cleanup.sh'; recreate_docs" >/tmp/claudux-manifest-t18-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t18-output
+    fi
+    test -f docs/technical/deterministic-generation.md && echo "manifest-page-still-exists"
+) > /tmp/claudux-manifest-t18 2>&1
+assert_contains "recreate guard blocks manifest docs deletion" "$(cat /tmp/claudux-manifest-t18)" "Recreate would delete manifest-owned documentation"
+assert_contains "recreate guard preserves manifest page" "$(cat /tmp/claudux-manifest-t18)" "manifest-page-still-exists"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
 rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13 /tmp/claudux-manifest-t14
-rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16
+rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16 /tmp/claudux-manifest-t17 /tmp/claudux-manifest-t18
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
 rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
-rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output
+rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

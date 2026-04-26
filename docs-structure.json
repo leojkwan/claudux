@@ -120,6 +120,7 @@
         "docs-structure.json",
         "lib/docs-manifest.sh",
         "lib/docs-generation.sh",
+        "lib/cleanup.sh",
         "lib/content-protection.sh",
         "tests/test-docs-manifest.sh"
       ],
@@ -191,6 +192,7 @@
           "level": 2,
           "source_patterns": [
             "lib/docs-manifest.sh",
+            "lib/cleanup.sh",
             "lib/content-protection.sh",
             "tests/test-docs-manifest.sh"
           ]

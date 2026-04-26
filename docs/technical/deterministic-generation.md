@@ -167,6 +167,8 @@ The guard snapshot adds the preservation check that schema validation cannot pro
 
 `claudux validate` runs manifest validation before link validation. `claudux update` runs it before model invocation and again after model writes.
 
+Deletion paths are guarded too. When `docs-structure.json` exists, `claudux cleanup` refuses to grant AI deletion authority by default, and `claudux recreate` refuses to remove `docs/` by default. Both operations require an explicit environment override because deleting a manifest-owned page is a manifest change, not a model inference.
+
 ## StrongYes Harness Example
 
 StrongYes has a local Supabase E2E harness that shows why pinned doctrine matters.
