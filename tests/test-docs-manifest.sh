@@ -587,6 +587,7 @@ TEST_DIR=$(setup_manifest_repo)
 const fs = require('fs');
 const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
 manifest.pages[0].source_patterns.push('/tmp/outside.sh');
+manifest.pages[0].source_patterns.push('C:tmp/outside.sh');
 manifest.pages[0].sections[0].source_patterns.push('../strongyes-web/scripts/run-local-supabase-test.mjs');
 fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
@@ -598,6 +599,7 @@ NODE
     fi
 ) > /tmp/claudux-manifest-t20 2>&1
 assert_contains "absolute source pattern fails validation" "$(cat /tmp/claudux-manifest-t20)" "source_patterns[2] must be repo-root relative"
+assert_contains "windows drive-relative source pattern fails validation" "$(cat /tmp/claudux-manifest-t20)" "source_patterns[3] must be repo-root relative"
 assert_contains "parent traversal source pattern fails validation" "$(cat /tmp/claudux-manifest-t20)" "source_patterns[1] must be repo-root relative"
 rm -rf "$TEST_DIR"
 

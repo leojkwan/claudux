@@ -83,7 +83,7 @@ function validateSourcePatterns(patterns, label) {
     const normalizedPattern = pattern.replace(/\\/g, '/');
     if (
       normalizedPattern.startsWith('/') ||
-      /^[A-Za-z]:\//.test(normalizedPattern) ||
+      /^[A-Za-z]:/.test(normalizedPattern) ||
       normalizedPattern.split('/').includes('..')
     ) {
       fail(`${label}: source_patterns[${patternIndex}] must be repo-root relative and cannot use absolute paths or .. segments`);
