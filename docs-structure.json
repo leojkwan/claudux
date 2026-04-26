@@ -151,6 +151,51 @@
           ]
         },
         {
+          "id": "static-analysis-index",
+          "heading": "Static Analysis Index",
+          "level": 2,
+          "source_patterns": [
+            "lib/docs-manifest.sh",
+            "tests/test-docs-manifest.sh"
+          ]
+        },
+        {
+          "id": "docs-structure-json-manifest",
+          "heading": "docs-structure.json Manifest",
+          "level": 2,
+          "source_patterns": ["docs-structure.json"]
+        },
+        {
+          "id": "pinned-pages-and-sections",
+          "heading": "Pinned Pages and Sections",
+          "level": 2,
+          "source_patterns": [
+            "docs-structure.json",
+            "lib/docs-manifest.sh",
+            "lib/content-protection.sh"
+          ]
+        },
+        {
+          "id": "dependency-aware-scope",
+          "heading": "Dependency-Aware Scope",
+          "level": 2,
+          "source_patterns": [
+            "lib/docs-manifest.sh",
+            "lib/docs-generation.sh",
+            "tests/test-docs-manifest.sh"
+          ]
+        },
+        {
+          "id": "validators",
+          "heading": "Validators",
+          "level": 2,
+          "source_patterns": [
+            "lib/docs-manifest.sh",
+            "lib/content-protection.sh",
+            "tests/test-docs-manifest.sh"
+          ]
+        },
+        {
           "id": "strongyes-harness-example",
           "heading": "StrongYes Harness Example",
           "level": 2,
@@ -158,6 +203,15 @@
           "source_patterns": [
             "../strongyes-web/scripts/run-local-supabase-test.mjs",
             "../strongyes-web/e2e/fixtures/staging-seed.ts"
+          ]
+        },
+        {
+          "id": "checkpoint-contract",
+          "heading": "Checkpoint Contract",
+          "level": 2,
+          "source_patterns": [
+            "lib/docs-generation.sh",
+            "tests/test-state-file.sh"
           ]
         }
       ]

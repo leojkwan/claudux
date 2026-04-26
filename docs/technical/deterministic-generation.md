@@ -73,6 +73,11 @@ Each run records:
 - Tracked docs file hashes.
 - Markdown headings per docs file.
 - `package.json` scripts.
+- CLI command aliases from `bin/claudux`.
+- Exported shell functions from shell-like source files.
+- Test files.
+- Deterministic dependency edges from shell sources and package scripts.
+- Internal docs links.
 - Manifest source ownership.
 
 This gives the prompt a stable fact table before any model output. A large repo can change thousands of files, but claudux can still start from sorted paths and hashes instead of asking the model to rediscover the project from a blank scan.
@@ -129,16 +134,18 @@ This complements skip markers from `lib/content-protection.sh`. Skip markers pro
 
 ## Dependency-Aware Scope
 
-Filename-only incremental mode is too coarse. `lib/docs-manifest.sh` resolves changed files through `source_patterns` so claudux can name the page or section likely to be stale.
+Filename-only incremental mode is too coarse. `lib/docs-manifest.sh` resolves changed files through `source_patterns` so claudux can name the page or section likely to be stale. It also expands the changed set through reverse dependency edges from the static index.
 
 Example:
 
 ```text
 lib/docs-generation.sh -> technical.deterministic-generation (docs/technical/deterministic-generation.md)
 lib/docs-generation.sh -> technical.deterministic-generation#pipeline (docs/technical/deterministic-generation.md)
+lib/ui.sh -> bin/claudux [shell-source]
+bin/claudux -> api.index (docs/api/index.md)
 ```
 
-The model still sees the changed file list, but it also gets the manifest-owned impact set. That distinction matters on large codebases where one source file has a known doc owner and hundreds of unrelated docs should stay untouched.
+The model still sees the changed file list, but it also gets the manifest-owned impact set. That distinction matters on large codebases where one source file has known dependents and hundreds of unrelated docs should stay untouched.
 
 ## Validators
 
@@ -174,13 +181,11 @@ When those files change, the docs should update those sections. When unrelated U
 
 ## Checkpoint Contract
 
-`.claudux-state.json` remains local per developer. It records the last successful generation point. The static index adds deterministic context around that checkpoint by recording hashes and manifest ownership at run time.
-
-Future checkpoint hardening should record:
+`.claudux-state.json` remains local per developer. It records the last successful generation point. The deterministic checkpoint metadata records:
 
 - Static index version.
 - Prompt version.
-- Backend and model.
+- Backend selection.
 - Manifest hash.
 - Source hashes.
 - Docs section hashes.

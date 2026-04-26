@@ -245,7 +245,161 @@ function headingsFor(filePath) {
     }));
 }
 
+function normalizeSourcePath(rawValue, fromFile, trackedSet) {
+  let candidate = String(rawValue || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!candidate || candidate.startsWith('<(')) return null;
+
+  candidate = candidate
+    .replace(/\$\{LIB_DIR\}/g, 'lib')
+    .replace(/\$LIB_DIR/g, 'lib')
+    .replace(/\$\{SCRIPT_DIR\}\/\.\.\/lib\//g, 'lib/')
+    .replace(/\$SCRIPT_DIR\/\.\.\/lib\//g, 'lib/');
+
+  if (candidate.startsWith('${SCRIPT_DIR}/') || candidate.startsWith('$SCRIPT_DIR/')) {
+    const suffix = candidate.replace(/^\$\{?SCRIPT_DIR\}?\//, '');
+    if (fromFile.startsWith('tests/')) {
+      candidate = `tests/${suffix}`;
+    } else if (fromFile.startsWith('bin/')) {
+      candidate = `bin/${suffix}`;
+    } else {
+      candidate = path.normalize(path.join(path.dirname(fromFile), suffix));
+    }
+  } else if (candidate.startsWith('./') || candidate.startsWith('../')) {
+    candidate = path.normalize(path.join(path.dirname(fromFile), candidate));
+  }
+
+  candidate = path.normalize(candidate).replace(/\\/g, '/').replace(/^\.\//, '');
+  if (candidate.startsWith('../')) return null;
+  if (trackedSet.has(candidate) || fs.existsSync(candidate)) return candidate;
+  return null;
+}
+
+function isShellLikeFile(filePath) {
+  if (filePath === 'bin/claudux' || filePath.endsWith('.sh') || filePath.endsWith('.bash') || filePath.endsWith('.zsh')) {
+    return true;
+  }
+  try {
+    return /^#!.*\b(?:bash|sh|zsh)\b/.test(fs.readFileSync(filePath, 'utf8').split(/\r?\n/, 1)[0] || '');
+  } catch {
+    return false;
+  }
+}
+
+function shellSourceEdges(filePath, trackedSet) {
+  if (!isShellLikeFile(filePath)) return [];
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  const edges = [];
+
+  if (filePath === 'bin/claudux') {
+    const libsMatch = content.match(/REQUIRED_LIBS=\(([\s\S]*?)\)/m);
+    if (libsMatch) {
+      const libs = [...libsMatch[1].matchAll(/"([^"]+)"/g)].map(match => `lib/${match[1]}`);
+      for (const lib of libs) {
+        if (trackedSet.has(lib) || fs.existsSync(lib)) {
+          edges.push({ from: filePath, to: lib, kind: 'shell-source' });
+        }
+      }
+    }
+    if (trackedSet.has('lib/codex-utils.sh') || fs.existsSync('lib/codex-utils.sh')) {
+      edges.push({ from: filePath, to: 'lib/codex-utils.sh', kind: 'conditional-shell-source' });
+    }
+  }
+
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^(?:if\s+!\s+)?(?:source|\.)\s+([^;\s]+)/);
+    if (!match) continue;
+    const target = normalizeSourcePath(match[1], filePath, trackedSet);
+    if (target && target !== filePath) {
+      edges.push({ from: filePath, to: target, kind: 'shell-source' });
+    }
+  }
+
+  return edges;
+}
+
+function packageScriptEdges(packageScripts, trackedSet) {
+  const edges = [];
+  for (const [scriptName, script] of Object.entries(packageScripts || {})) {
+    const regex = /(?:^|[\s"'`])((?:bin|lib|tests|scripts)\/[A-Za-z0-9._/-]+)(?=$|[\s"'`;])/g;
+    let match;
+    while ((match = regex.exec(String(script))) !== null) {
+      let target = match[1].replace(/^\.\//, '');
+      if (!path.extname(target)) {
+        for (const ext of ['', '.sh', '.js', '.mjs']) {
+          if (trackedSet.has(`${target}${ext}`) || fs.existsSync(`${target}${ext}`)) {
+            target = `${target}${ext}`;
+            break;
+          }
+        }
+      }
+      if (trackedSet.has(target) || fs.existsSync(target)) {
+        edges.push({ from: 'package.json', to: target, kind: `package-script:${scriptName}` });
+      }
+    }
+  }
+  return edges;
+}
+
+function shellFunctionExports(filePath) {
+  if (!isShellLikeFile(filePath)) return [];
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  return content
+    .split(/\r?\n/)
+    .map(line => line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{/))
+    .filter(Boolean)
+    .map(match => ({ file: filePath, name: match[1], kind: 'shell-function' }));
+}
+
+function cliCommandsFromBin(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  const content = fs.readFileSync(filePath, 'utf8');
+  const commands = new Set();
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.match(/^\s*((?:"[^"]+"|'[^']+'|[A-Za-z0-9_-]+)(?:\|(?:"[^"]+"|'[^']+'|[A-Za-z0-9_-]+))*)\)/);
+    if (!match) continue;
+    for (const raw of match[1].split('|')) {
+      const command = raw.replace(/^['"]|['"]$/g, '');
+      if (command && command !== '*' && command !== '""') commands.add(command);
+    }
+  }
+  return [...commands].sort();
+}
+
+function docsPathFromLink(link, fromFile) {
+  if (!link || /^(?:https?:|mailto:|tel:)/.test(link) || link.startsWith('#')) return null;
+  const clean = link.split('#')[0].split('?')[0];
+  if (!clean) return null;
+
+  let target;
+  if (clean.startsWith('/')) {
+    target = `docs${clean}`;
+  } else {
+    target = path.join(path.dirname(fromFile), clean);
+  }
+  target = target.replace(/\\/g, '/');
+  if (target.endsWith('/')) target += 'index.md';
+  if (!path.extname(target)) target += '.md';
+  return path.normalize(target).replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function docsLinksFor(filePath) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const links = [];
+  const regex = /\[[^\]]+\]\(([^)]+)\)/g;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    const target = docsPathFromLink(match[1], filePath);
+    if (target) links.push({ from: filePath, to: target, kind: 'markdown-link' });
+  }
+  return links;
+}
+
 const files = trackedFiles();
+const trackedSet = new Set(files);
 const docsFiles = files.filter(file => file.startsWith('docs/') && file.endsWith('.md'));
 const sourceFiles = files.filter(file => {
   if (file.startsWith('docs/')) return false;
@@ -275,6 +429,15 @@ try {
   headSha = 'unknown';
 }
 
+const dependencyEdges = [
+  ...sourceFiles.flatMap(file => shellSourceEdges(file, trackedSet)),
+  ...packageScriptEdges(packageScripts, trackedSet),
+]
+  .filter((edge, index, all) =>
+    all.findIndex(candidate => candidate.from === edge.from && candidate.to === edge.to && candidate.kind === edge.kind) === index
+  )
+  .sort((a, b) => `${a.from}\0${a.to}\0${a.kind}`.localeCompare(`${b.from}\0${b.to}\0${b.kind}`));
+
 const index = {
   version: 1,
   generated_at: new Date().toISOString(),
@@ -290,6 +453,14 @@ const index = {
       }
     : null,
   package_scripts: packageScripts,
+  cli_commands: cliCommandsFromBin('bin/claudux'),
+  exported_symbols: sourceFiles.flatMap(shellFunctionExports).sort((a, b) =>
+    `${a.file}\0${a.name}`.localeCompare(`${b.file}\0${b.name}`)
+  ),
+  tests: sourceFiles
+    .filter(file => file.startsWith('tests/'))
+    .map(file => ({ path: file, sha256: sha256File(file) })),
+  dependency_edges: dependencyEdges,
   source_files: sourceFiles.map(file => ({
     path: file,
     sha256: sha256File(file),
@@ -299,6 +470,9 @@ const index = {
     sha256: sha256File(file),
     headings: headingsFor(file),
   })),
+  docs_links: docsFiles.flatMap(docsLinksFor).sort((a, b) =>
+    `${a.from}\0${a.to}`.localeCompare(`${b.from}\0${b.to}`)
+  ),
   source_ownership: manifest && Array.isArray(manifest.pages)
     ? manifest.pages.map(page => ({
         page_id: page.id,
@@ -346,6 +520,15 @@ if (index.manifest) {
 const scripts = Object.keys(index.package_scripts || {});
 if (scripts.length > 0) {
   console.log(`- Package scripts: ${scripts.sort().join(', ')}`);
+}
+if ((index.cli_commands || []).length > 0) {
+  console.log(`- CLI commands: ${index.cli_commands.join(', ')}`);
+}
+if ((index.tests || []).length > 0) {
+  console.log(`- Test files indexed: ${index.tests.length}`);
+}
+if ((index.dependency_edges || []).length > 0) {
+  console.log(`- Dependency edges indexed: ${index.dependency_edges.length}`);
 }
 const owned = (index.source_ownership || []).filter(page => (page.source_patterns || []).length > 0);
 if (owned.length > 0) {
@@ -873,6 +1056,7 @@ resolve_impacted_docs_from_changed_files() {
 
     node - "$manifest" <<'NODE'
 const fs = require('fs');
+const path = require('path');
 
 const manifestPath = process.argv[2];
 const changedFiles = (process.env.CLAUDUX_CHANGED_FILES || '')
@@ -896,19 +1080,62 @@ function matches(pattern, file) {
   return patternToRegExp(pattern).test(file);
 }
 
+function defaultIndexPath() {
+  if (process.env.CLAUDUX_STATIC_INDEX_FILE) return process.env.CLAUDUX_STATIC_INDEX_FILE;
+  const indexDir = process.env.CLAUDUX_INDEX_DIR || '.claudux/index';
+  return path.join(indexDir, 'static-analysis.json');
+}
+
+function dependencyExpandedFiles(seedFiles) {
+  const expanded = new Set(seedFiles);
+  const notes = [];
+  const indexPath = defaultIndexPath();
+  if (!fs.existsSync(indexPath)) {
+    return { files: [...expanded].sort(), notes };
+  }
+
+  let index;
+  try {
+    index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+  } catch {
+    return { files: [...expanded].sort(), notes };
+  }
+
+  const edges = Array.isArray(index.dependency_edges) ? index.dependency_edges : [];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (!edge || !edge.from || !edge.to) continue;
+      if (expanded.has(edge.to) && !expanded.has(edge.from)) {
+        expanded.add(edge.from);
+        notes.push(`${edge.to} -> ${edge.from} [${edge.kind || 'dependency'}]`);
+        changed = true;
+      }
+    }
+  }
+
+  return { files: [...expanded].sort(), notes: [...new Set(notes)].sort() };
+}
+
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const hits = [];
+const expanded = dependencyExpandedFiles(changedFiles);
+
+for (const note of expanded.notes) {
+  hits.push(`dependency-expanded scope: ${note}`);
+}
 
 for (const page of manifest.pages || []) {
   const pagePatterns = page.source_patterns || [];
-  const pageHits = changedFiles.filter(file => pagePatterns.some(pattern => matches(pattern, file)));
+  const pageHits = expanded.files.filter(file => pagePatterns.some(pattern => matches(pattern, file)));
   if (pageHits.length > 0) {
     hits.push(`${pageHits.join(', ')} -> ${page.id} (${page.path})`);
   }
 
   for (const section of page.sections || []) {
     const sectionPatterns = section.source_patterns || [];
-    const sectionHits = changedFiles.filter(file => sectionPatterns.some(pattern => matches(pattern, file)));
+    const sectionHits = expanded.files.filter(file => sectionPatterns.some(pattern => matches(pattern, file)));
     if (sectionHits.length > 0) {
       hits.push(`${sectionHits.join(', ')} -> ${page.id}#${section.id} (${page.path})`);
     }
