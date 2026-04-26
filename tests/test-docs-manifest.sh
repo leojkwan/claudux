@@ -250,7 +250,7 @@ TEST_DIR=$(setup_manifest_repo)
         '    {' \
         '      "page_id": "technical.deterministic-generation",' \
         '      "section_id": "generated-details",' \
-        '      "body_markdown": "New generated body.\n\n- Source-owned fact."' \
+        '      "body_markdown": "New generated body.\n\n```md\n## Example inside code fence\n```\n\n### Generated Subheading\n\n- Source-owned fact."' \
         '    }' \
         '  ]' \
         '}' > /tmp/claudux-section-patches-t11.json
@@ -258,6 +258,8 @@ TEST_DIR=$(setup_manifest_repo)
     cat docs/technical/deterministic-generation.md
 ) > /tmp/claudux-manifest-t11 2>&1
 assert_contains "section patcher applies generated body" "$(cat /tmp/claudux-manifest-t11)" "New generated body."
+assert_contains "section patcher permits code-fenced markdown headings" "$(cat /tmp/claudux-manifest-t11)" "## Example inside code fence"
+assert_contains "section patcher permits deeper generated subheadings" "$(cat /tmp/claudux-manifest-t11)" "### Generated Subheading"
 assert_contains "section patcher preserves pinned pipeline body" "$(cat /tmp/claudux-manifest-t11)" "## Pipeline"
 assert_contains "section patcher preserves pinned harness body" "$(cat /tmp/claudux-manifest-t11)" "## StrongYes Harness Example"
 rm -rf "$TEST_DIR"
@@ -345,15 +347,77 @@ assert_contains "incremental allowlist blocks unrelated section" "$(cat /tmp/cla
 assert_contains "full scan still allows generated section" "$(cat /tmp/claudux-manifest-t14)" "Out of scope body."
 rm -rf "$TEST_DIR"
 
+# --- Test 15: section patcher rejects mixed valid/invalid batches without partial writes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "Should not land."' \
+        '    },' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "pipeline",' \
+        '      "body_markdown": "Invalid pinned rewrite."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t15.json
+    if apply_manifest_section_patches /tmp/claudux-section-patches-t15.json >/tmp/claudux-manifest-t15-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t15-output
+    fi
+    cat docs/technical/deterministic-generation.md
+) > /tmp/claudux-manifest-t15 2>&1
+assert_contains "section patcher rejects invalid mixed batch" "$(cat /tmp/claudux-manifest-t15)" "is pinned/read-only"
+assert_contains "section patcher leaves original generated body after failed batch" "$(cat /tmp/claudux-manifest-t15)" "Old generated body."
+assert_not_contains "section patcher does not partially write failed batch" "$(cat /tmp/claudux-manifest-t15)" "Should not land."
+rm -rf "$TEST_DIR"
+
+# --- Test 16: section patcher rejects body headings that escape the bounded section ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "Intro.\n\n## Escaped Heading\n\nThis would become a sibling section."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t16.json
+    if apply_manifest_section_patches /tmp/claudux-section-patches-t16.json >/tmp/claudux-manifest-t16-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t16-output
+    fi
+    cat docs/technical/deterministic-generation.md
+) > /tmp/claudux-manifest-t16 2>&1
+assert_contains "section patcher rejects same-level headings in body" "$(cat /tmp/claudux-manifest-t16)" "section patches cannot create same-or-higher-level headings"
+assert_contains "section patcher preserves original body after boundary rejection" "$(cat /tmp/claudux-manifest-t16)" "Old generated body."
+assert_not_contains "section patcher does not write escaping body" "$(cat /tmp/claudux-manifest-t16)" "This would become a sibling section."
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
 rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13 /tmp/claudux-manifest-t14
+rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
 rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
+rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
+rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 
 test_summary

@@ -708,6 +708,9 @@ const patches = Array.isArray(payload) ? payload : payload.patches;
 const errors = [];
 const applied = [];
 let impactAllowlist = null;
+const fileStates = new Map();
+const operations = [];
+const seenTargets = new Set();
 
 if (impactAllowlistPath && fs.existsSync(impactAllowlistPath)) {
   impactAllowlist = JSON.parse(fs.readFileSync(impactAllowlistPath, 'utf8'));
@@ -728,6 +731,33 @@ function normalizeBody(value, section) {
   return body;
 }
 
+function bodyBoundaryHeading(body, section) {
+  let fenceChar = null;
+  for (const [offset, line] of body.split('\n').entries()) {
+    const fence = line.match(/^\s*(```+|~~~+)/);
+    if (fence) {
+      const currentFenceChar = fence[1][0];
+      if (!fenceChar) {
+        fenceChar = currentFenceChar;
+      } else if (fenceChar === currentFenceChar) {
+        fenceChar = null;
+      }
+      continue;
+    }
+    if (fenceChar) continue;
+
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (match && match[1].length <= section.level) {
+      return {
+        line: offset + 1,
+        level: match[1].length,
+        heading: match[2].trim(),
+      };
+    }
+  }
+  return null;
+}
+
 function findSection(lines, section) {
   const headingPattern = new RegExp(
     `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
@@ -745,6 +775,17 @@ function findSection(lines, section) {
   }
 
   return { start, end };
+}
+
+function readPageState(pagePath) {
+  if (!fileStates.has(pagePath)) {
+    const original = fs.readFileSync(pagePath, 'utf8').replace(/\r\n/g, '\n');
+    const hadFinalNewline = original.endsWith('\n');
+    const lines = original.split('\n');
+    if (hadFinalNewline) lines.pop();
+    fileStates.set(pagePath, { lines, changed: false });
+  }
+  return fileStates.get(pagePath);
 }
 
 function impactAllowlistAllows(page, section) {
@@ -777,6 +818,13 @@ if (!Array.isArray(patches)) {
       continue;
     }
 
+    const targetKey = `${page.id}#${section.id}`;
+    if (seenTargets.has(targetKey)) {
+      fail(`patches[${index}] duplicates target ${targetKey}`);
+      continue;
+    }
+    seenTargets.add(targetKey);
+
     if (!impactAllowlistAllows(page, section)) {
       fail(`${page.id}#${section.id} is outside incremental impact allowlist`);
       continue;
@@ -798,45 +846,72 @@ if (!Array.isArray(patches)) {
       continue;
     }
 
-    const original = fs.readFileSync(page.path, 'utf8').replace(/\r\n/g, '\n');
-    const hadFinalNewline = original.endsWith('\n');
-    const lines = original.split('\n');
-    if (hadFinalNewline) lines.pop();
+    const body = normalizeBody(rawBody, section);
+    const boundaryHeading = bodyBoundaryHeading(body, section);
+    if (boundaryHeading) {
+      fail(`${page.id}#${section.id} body contains h${boundaryHeading.level} heading "${boundaryHeading.heading}" on body line ${boundaryHeading.line}; section patches cannot create same-or-higher-level headings`);
+      continue;
+    }
 
-    let span = findSection(lines, section);
+    const state = readPageState(page.path);
+    const span = findSection(state.lines, section);
+    if (!span && patch.create_if_missing !== true) {
+      fail(`${page.path} is missing heading "${section.heading}"`);
+      continue;
+    }
+
+    operations.push({
+      page_id: page.id,
+      section_id: section.id,
+      page_path: page.path,
+      section,
+      body,
+      create_if_missing: patch.create_if_missing === true,
+    });
+  }
+}
+
+if (errors.length === 0) {
+  for (const operation of operations) {
+    const state = readPageState(operation.page_path);
+    let span = findSection(state.lines, operation.section);
     if (!span) {
-      if (patch.create_if_missing === true) {
-        lines.push('', `${'#'.repeat(section.level)} ${section.heading}`);
-        span = { start: lines.length - 1, end: lines.length };
+      if (operation.create_if_missing) {
+        state.lines.push('', `${'#'.repeat(operation.section.level)} ${operation.section.heading}`);
+        span = { start: state.lines.length - 1, end: state.lines.length };
       } else {
-        fail(`${page.path} is missing heading "${section.heading}"`);
+        fail(`${operation.page_path} is missing heading "${operation.section.heading}"`);
         continue;
       }
     }
 
-    const body = normalizeBody(rawBody, section);
-    const replacement = [lines[span.start]];
+    const replacement = [state.lines[span.start]];
+    const body = operation.body;
     if (body.length > 0) {
       replacement.push('', ...body.split('\n'));
     }
     replacement.push('');
 
     const next = [
-      ...lines.slice(0, span.start),
+      ...state.lines.slice(0, span.start),
       ...replacement,
-      ...lines.slice(span.end),
+      ...state.lines.slice(span.end),
     ];
-    const nextContent = `${next.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`;
-
-    fs.mkdirSync(path.dirname(page.path), { recursive: true });
-    fs.writeFileSync(page.path, nextContent);
-    applied.push(`${page.id}#${section.id}`);
+    state.lines = next.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd().split('\n');
+    state.changed = true;
+    applied.push(`${operation.page_id}#${operation.section_id}`);
   }
 }
 
 if (errors.length > 0) {
   for (const error of errors) console.error(`[claudux:patch] ${error}`);
   process.exit(1);
+}
+
+for (const [pagePath, state] of fileStates.entries()) {
+  if (!state.changed) continue;
+  fs.mkdirSync(path.dirname(pagePath), { recursive: true });
+  fs.writeFileSync(pagePath, `${state.lines.join('\n').trimEnd()}\n`);
 }
 
 console.log(`[claudux:patch] applied ${applied.length} section patch(es)`);

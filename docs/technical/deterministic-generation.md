@@ -55,6 +55,8 @@ Claudux then applies the patch itself:
 - The page ID and section ID must exist in `docs-structure.json`.
 - The target page must already exist on disk.
 - The patch replaces only the body under that manifest heading, ending before the next same-or-higher-level heading.
+- The whole patch batch validates before any file is written; one invalid patch leaves every doc file unchanged.
+- Patch bodies may include deeper subheadings, but same-or-higher-level headings are rejected because they would escape the bounded section.
 - Incremental runs reject patches outside `.claudux/index/impacted-docs.json`; full scans keep the wider manifest-generated section contract.
 - Pinned sections are rejected unless the human explicitly runs with `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` and the patch sets `unlock_pinned: true`.
 - Claude runs with only the `Read` tool in patch mode.
