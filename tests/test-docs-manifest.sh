@@ -352,6 +352,36 @@ NODE
 assert_contains "section patch extraction captures payload" "$(cat /tmp/claudux-manifest-t13)" "1:generated-details:Extracted body."
 rm -rf "$TEST_DIR"
 
+# --- Test 13b: section patch payload extraction rejects multiple marker pairs ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}\nCLAUDUX_SECTION_PATCHES_JSON_END\nCLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' > /tmp/claudux-manifest-t13b-log.jsonl
+    if extract_section_patch_payload /tmp/claudux-manifest-t13b-log.jsonl /tmp/claudux-manifest-t13b-patches.json >/tmp/claudux-manifest-t13b-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t13b-output
+    fi
+) > /tmp/claudux-manifest-t13b 2>&1
+assert_contains "section patch extraction rejects multiple payloads" "$(cat /tmp/claudux-manifest-t13b)" "expected exactly one section patch payload marker pair"
+rm -rf "$TEST_DIR"
+
+# --- Test 13c: section patch payload extraction rejects orphaned markers ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}"}' > /tmp/claudux-manifest-t13c-log.jsonl
+    if extract_section_patch_payload /tmp/claudux-manifest-t13c-log.jsonl /tmp/claudux-manifest-t13c-patches.json >/tmp/claudux-manifest-t13c-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t13c-output
+    fi
+) > /tmp/claudux-manifest-t13c 2>&1
+assert_contains "section patch extraction rejects orphaned markers" "$(cat /tmp/claudux-manifest-t13c)" "section patch payload markers must be paired"
+rm -rf "$TEST_DIR"
+
 # --- Test 14: incremental impact allowlist blocks unrelated generated sections ---
 TEST_DIR=$(setup_manifest_repo)
 (
@@ -572,6 +602,8 @@ rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claud
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
 rm -f /tmp/claudux-manifest-t9b /tmp/claudux-manifest-t9b-output /tmp/claudux-manifest-t9b-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
+rm -f /tmp/claudux-manifest-t13b /tmp/claudux-manifest-t13b-log.jsonl /tmp/claudux-manifest-t13b-output /tmp/claudux-manifest-t13b-patches.json
+rm -f /tmp/claudux-manifest-t13c /tmp/claudux-manifest-t13c-log.jsonl /tmp/claudux-manifest-t13c-output /tmp/claudux-manifest-t13c-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
 rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output

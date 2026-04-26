@@ -50,6 +50,8 @@ In that mode the model gets the static index, manifest impact set, and a strict 
 }
 ```
 
+Exactly one payload marker pair is allowed. Multiple payload blocks or orphaned start/end markers fail before JSON parsing, so claudux never silently chooses one model-proposed patch set over another.
+
 Claudux then applies the patch itself:
 
 - The page ID and section ID must exist in `docs-structure.json`.

@@ -789,13 +789,36 @@ for (const line of raw.split(/\r?\n/)) {
 }
 
 const text = chunks.join('\n');
-const match = text.match(/CLAUDUX_SECTION_PATCHES_JSON_START\s*([\s\S]*?)\s*CLAUDUX_SECTION_PATCHES_JSON_END/);
-if (!match) {
+const startMarker = 'CLAUDUX_SECTION_PATCHES_JSON_START';
+const endMarker = 'CLAUDUX_SECTION_PATCHES_JSON_END';
+
+function countMarker(marker) {
+  return text.split(marker).length - 1;
+}
+
+const startCount = countMarker(startMarker);
+const endCount = countMarker(endMarker);
+if (startCount === 0 && endCount === 0) {
   console.error('[claudux:patch] missing section patch payload markers');
   process.exit(1);
 }
+if (startCount !== endCount) {
+  console.error(`[claudux:patch] section patch payload markers must be paired (found ${startCount} start, ${endCount} end)`);
+  process.exit(1);
+}
+if (startCount !== 1) {
+  console.error(`[claudux:patch] expected exactly one section patch payload marker pair, found ${startCount}`);
+  process.exit(1);
+}
 
-let payloadText = match[1].trim();
+const startIndex = text.indexOf(startMarker);
+const endIndex = text.indexOf(endMarker);
+if (endIndex < startIndex) {
+  console.error('[claudux:patch] section patch payload end marker appears before start marker');
+  process.exit(1);
+}
+
+let payloadText = text.slice(startIndex + startMarker.length, endIndex).trim();
 payloadText = payloadText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
 let payload;
