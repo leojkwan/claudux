@@ -166,6 +166,36 @@ assert_contains "failure label still handles claude backend" \
     "$fail_block" \
     'Claude CLI'
 
+# --- Test 18: manifest section patch mode removes Claude write tools ---
+# Deterministic docs mode must not hand the model whole-tree write permission.
+assert_contains "update enables section patch mode from manifest" \
+    "$update_fn" \
+    'CLAUDUX_SECTION_PATCH_MODE=1'
+assert_contains "Claude patch mode downgrades allowed tools to Read" \
+    "$run_claude_body" \
+    'allowed_tools="Read"'
+assert_contains "Claude normal mode still has legacy write tools" \
+    "$run_claude_body" \
+    'allowed_tools="Read,Write,Edit,Delete"'
+assert_contains "section patches are extracted from model output" \
+    "$update_fn" \
+    'extract_section_patch_payload'
+assert_contains "section patches are applied by claudux" \
+    "$update_fn" \
+    'apply_manifest_section_patches'
+
+# --- Test 19: Codex patch mode requests a read-only sandbox ---
+codex_exec_body=$(sed -n '/^run_codex_exec()/,/^}/p' "$LIB_DIR/codex-utils.sh")
+assert_contains "Codex exec reads section patch mode" \
+    "$codex_exec_body" \
+    'CLAUDUX_SECTION_PATCH_MODE'
+assert_contains "Codex patch mode defaults to read-only sandbox" \
+    "$codex_exec_body" \
+    'read-only'
+assert_contains "Codex normal mode still defaults to danger-full-access" \
+    "$codex_exec_body" \
+    'danger-full-access'
+
 # Cleanup
 rm -f /tmp/claudux-test-backend-default /tmp/claudux-test-backend-codex /tmp/claudux-test-missing
 rm -f /tmp/claudux-test-header-claude /tmp/claudux-test-header-codex

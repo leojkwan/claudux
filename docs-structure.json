@@ -139,6 +139,18 @@
           "source_patterns": ["lib/docs-generation.sh", "lib/docs-manifest.sh"]
         },
         {
+          "id": "section-patch-application",
+          "heading": "Section Patch Application",
+          "level": 2,
+          "source_patterns": [
+            "lib/docs-manifest.sh",
+            "lib/docs-generation.sh",
+            "lib/codex-utils.sh",
+            "tests/test-docs-manifest.sh",
+            "tests/test-backend-router.sh"
+          ]
+        },
+        {
           "id": "strongyes-harness-example",
           "heading": "StrongYes Harness Example",
           "level": 2,

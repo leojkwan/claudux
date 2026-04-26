@@ -20,7 +20,7 @@ setup_manifest_repo() {
         git config user.email "test@test.com"
         git config user.name "Test"
         mkdir -p docs/technical lib tests
-        printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n' > docs/technical/deterministic-generation.md
+        printf '# Deterministic Generation\n\n## Pipeline\n\nBody.\n\n## StrongYes Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n' > docs/technical/deterministic-generation.md
         printf '# Manual Notes\n\n<!-- skip -->\nHand-written deployment doctrine.\n<!-- /skip -->\n' > docs/manual.md
         printf '#!/bin/bash\nupdate() { :; }\n' > lib/docs-generation.sh
         printf '#!/bin/bash\nvalidate_docs_structure_manifest() { :; }\n' > lib/docs-manifest.sh
@@ -48,6 +48,12 @@ setup_manifest_repo() {
             '          "heading": "StrongYes Harness Example",' \
             '          "level": 2,' \
             '          "pinned": true' \
+            '        },' \
+            '        {' \
+            '          "id": "generated-details",' \
+            '          "heading": "Generated Details",' \
+            '          "level": 2,' \
+            '          "source_patterns": ["lib/docs-manifest.sh"]' \
             '        }' \
             '      ]' \
             '    }' \
@@ -187,11 +193,88 @@ TEST_DIR=$(setup_manifest_repo)
 assert_contains "guard snapshot catches pinned heading reorder" "$(cat /tmp/claudux-manifest-t9)" "pinned heading order changed"
 rm -rf "$TEST_DIR"
 
+# --- Test 10: section patch contract lists generated sections and pins read-only doctrine ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    format_section_patch_contract
+) > /tmp/claudux-manifest-t10 2>&1
+assert_contains "section patch contract lists generated section" "$(cat /tmp/claudux-manifest-t10)" "technical.deterministic-generation#generated-details"
+assert_contains "section patch contract lists pinned section as read-only" "$(cat /tmp/claudux-manifest-t10)" "technical.deterministic-generation#pipeline"
+rm -rf "$TEST_DIR"
+
+# --- Test 11: section patcher updates only the manifest-owned generated section ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "New generated body.\n\n- Source-owned fact."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t11.json
+    apply_manifest_section_patches /tmp/claudux-section-patches-t11.json
+    cat docs/technical/deterministic-generation.md
+) > /tmp/claudux-manifest-t11 2>&1
+assert_contains "section patcher applies generated body" "$(cat /tmp/claudux-manifest-t11)" "New generated body."
+assert_contains "section patcher preserves pinned pipeline body" "$(cat /tmp/claudux-manifest-t11)" "## Pipeline"
+assert_contains "section patcher preserves pinned harness body" "$(cat /tmp/claudux-manifest-t11)" "## StrongYes Harness Example"
+rm -rf "$TEST_DIR"
+
+# --- Test 12: section patcher rejects pinned section edits by default ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "pipeline",' \
+        '      "body_markdown": "Rewrite pinned doctrine."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t12.json
+    if apply_manifest_section_patches /tmp/claudux-section-patches-t12.json >/tmp/claudux-manifest-t12-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t12-output
+    fi
+) > /tmp/claudux-manifest-t12 2>&1
+assert_contains "section patcher rejects pinned edits" "$(cat /tmp/claudux-manifest-t12)" "is pinned/read-only"
+rm -rf "$TEST_DIR"
+
+# --- Test 13: section patch payload extraction reads JSONL assistant text ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Extracted body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' > /tmp/claudux-manifest-t13-log.jsonl
+    extract_section_patch_payload /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
+    node - /tmp/claudux-manifest-t13-patches.json <<'NODE'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+console.log(`${payload.patches.length}:${payload.patches[0].section_id}:${payload.patches[0].body_markdown}`);
+NODE
+) > /tmp/claudux-manifest-t13 2>&1
+assert_contains "section patch extraction captures payload" "$(cat /tmp/claudux-manifest-t13)" "1:generated-details:Extracted body."
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
+rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
 rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
+rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
+rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json
 
 test_summary

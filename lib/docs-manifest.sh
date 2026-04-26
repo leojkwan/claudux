@@ -5,6 +5,7 @@ DOCS_STRUCTURE_FILE="${DOCS_STRUCTURE_FILE:-docs-structure.json}"
 CLAUDUX_INDEX_DIR="${CLAUDUX_INDEX_DIR:-.claudux/index}"
 CLAUDUX_STATIC_INDEX_FILE="${CLAUDUX_STATIC_INDEX_FILE:-$CLAUDUX_INDEX_DIR/static-analysis.json}"
 CLAUDUX_GUARD_SNAPSHOT_FILE="${CLAUDUX_GUARD_SNAPSHOT_FILE:-$CLAUDUX_INDEX_DIR/docs-guard-snapshot.json}"
+CLAUDUX_SECTION_PATCH_FILE="${CLAUDUX_SECTION_PATCH_FILE:-$CLAUDUX_INDEX_DIR/section-patches.json}"
 
 docs_structure_path() {
     echo "${CLAUDUX_DOCS_STRUCTURE:-$DOCS_STRUCTURE_FILE}"
@@ -354,6 +355,289 @@ if (owned.length > 0) {
   }
 }
 console.log('- Generation rule: preserve manifest page IDs, nav order, deletion_policy, and pinned sections unless docs-structure.json changes first.');
+NODE
+}
+
+claudux_section_patch_mode_enabled() {
+    local manifest
+    manifest="$(docs_structure_path)"
+    [[ -f "$manifest" ]]
+}
+
+format_section_patch_contract() {
+    local manifest
+    manifest="$(docs_structure_path)"
+    if [[ ! -f "$manifest" ]]; then
+        return 0
+    fi
+
+    require_node_for_manifest || return 1
+
+    node - "$manifest" <<'NODE'
+const fs = require('fs');
+
+const manifestPath = process.argv[2];
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const allowed = [];
+const pinned = [];
+
+for (const page of manifest.pages || []) {
+  for (const section of page.sections || []) {
+    const entry = {
+      page_id: page.id,
+      section_id: section.id,
+      path: page.path,
+      heading: section.heading,
+      level: section.level,
+    };
+    if (section.pinned === true || section.generated === false) {
+      pinned.push(entry);
+    } else {
+      allowed.push(entry);
+    }
+  }
+}
+
+console.log('**SECTION PATCH MODE (manifest-enforced)**');
+console.log('- Direct documentation writes are disabled. Return patch JSON in your final response; claudux will apply it.');
+console.log('- Output exactly one payload between CLAUDUX_SECTION_PATCHES_JSON_START and CLAUDUX_SECTION_PATCHES_JSON_END.');
+console.log('- Schema: {"patches":[{"page_id":"...","section_id":"...","body_markdown":"markdown body without the heading"}]}');
+console.log('- Pinned sections are read-only unless the human explicitly runs with CLAUDUX_UNLOCK_PINNED_SECTIONS=1 and the patch sets "unlock_pinned": true.');
+if (allowed.length > 0) {
+  console.log('- Allowed generated sections:');
+  for (const section of allowed) {
+    console.log(`  - ${section.page_id}#${section.section_id} -> ${section.path} (h${section.level} ${section.heading})`);
+  }
+} else {
+  console.log('- Allowed generated sections: none. Return {"patches":[]} unless you are proposing a manifest diff for a future run.');
+}
+if (pinned.length > 0) {
+  console.log('- Read-only pinned/source-owned sections:');
+  for (const section of pinned.slice(0, 40)) {
+    console.log(`  - ${section.page_id}#${section.section_id} -> ${section.path} (h${section.level} ${section.heading})`);
+  }
+}
+NODE
+}
+
+extract_section_patch_payload() {
+    local log_file="$1"
+    local output_file="${2:-${CLAUDUX_SECTION_PATCH_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/section-patches.json}}"
+
+    require_node_for_manifest || return 1
+    mkdir -p "$(dirname "$output_file")" || return 1
+
+    node - "$log_file" "$output_file" <<'NODE'
+const fs = require('fs');
+
+const logFile = process.argv[2];
+const outputFile = process.argv[3];
+const raw = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+const chunks = [];
+
+function collectStrings(value) {
+  if (typeof value === 'string') {
+    chunks.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value)) {
+      if (['text', 'content', 'result', 'message', 'summary'].includes(key)) {
+        collectStrings(nested);
+      } else if (typeof nested === 'object') {
+        collectStrings(nested);
+      }
+    }
+  }
+}
+
+for (const line of raw.split(/\r?\n/)) {
+  if (!line.trim()) continue;
+  try {
+    collectStrings(JSON.parse(line));
+  } catch {
+    chunks.push(line);
+  }
+}
+
+const text = chunks.join('\n');
+const match = text.match(/CLAUDUX_SECTION_PATCHES_JSON_START\s*([\s\S]*?)\s*CLAUDUX_SECTION_PATCHES_JSON_END/);
+if (!match) {
+  console.error('[claudux:patch] missing section patch payload markers');
+  process.exit(1);
+}
+
+let payloadText = match[1].trim();
+payloadText = payloadText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+let payload;
+try {
+  payload = JSON.parse(payloadText);
+} catch (error) {
+  console.error(`[claudux:patch] invalid section patch JSON (${error.message})`);
+  process.exit(1);
+}
+
+if (Array.isArray(payload)) {
+  payload = { patches: payload };
+}
+if (!payload || !Array.isArray(payload.patches)) {
+  console.error('[claudux:patch] payload must be an object with a patches array');
+  process.exit(1);
+}
+
+fs.mkdirSync(require('path').dirname(outputFile), { recursive: true });
+fs.writeFileSync(outputFile, `${JSON.stringify(payload, null, 2)}\n`);
+console.log(`[claudux:patch] extracted ${payload.patches.length} patch(es) to ${outputFile}`);
+NODE
+}
+
+apply_manifest_section_patches() {
+    local patch_file="${1:-${CLAUDUX_SECTION_PATCH_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/section-patches.json}}"
+    local manifest
+    manifest="$(docs_structure_path)"
+
+    if [[ ! -f "$manifest" ]]; then
+        return 0
+    fi
+    if [[ ! -f "$patch_file" ]]; then
+        echo "[claudux:patch] no section patch file found: $patch_file" >&2
+        return 1
+    fi
+
+    require_node_for_manifest || return 1
+
+    node - "$manifest" "$patch_file" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const manifestPath = process.argv[2];
+const patchPath = process.argv[3];
+const unlockPinned = process.env.CLAUDUX_UNLOCK_PINNED_SECTIONS === '1';
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const payload = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
+const patches = Array.isArray(payload) ? payload : payload.patches;
+const errors = [];
+const applied = [];
+
+function fail(message) {
+  errors.push(`section patch: ${message}`);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeBody(value, section) {
+  let body = String(value ?? '').replace(/\r\n/g, '\n').trim();
+  const headingPattern = new RegExp(`^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*\\n+`);
+  body = body.replace(headingPattern, '').trim();
+  return body;
+}
+
+function findSection(lines, section) {
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
+  );
+  const start = lines.findIndex(line => headingPattern.test(line));
+  if (start === -1) return null;
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= section.level) {
+      end = index;
+      break;
+    }
+  }
+
+  return { start, end };
+}
+
+if (!Array.isArray(patches)) {
+  fail('payload must include a patches array');
+} else {
+  for (const [index, patch] of patches.entries()) {
+    if (!patch || typeof patch !== 'object') {
+      fail(`patches[${index}] must be an object`);
+      continue;
+    }
+
+    const page = (manifest.pages || []).find(candidate => candidate.id === patch.page_id);
+    if (!page) {
+      fail(`patches[${index}] references unknown page_id "${patch.page_id}"`);
+      continue;
+    }
+
+    const section = (page.sections || []).find(candidate => candidate.id === patch.section_id);
+    if (!section) {
+      fail(`patches[${index}] references unknown section_id "${patch.section_id}" on ${page.id}`);
+      continue;
+    }
+
+    if ((section.pinned === true || section.generated === false) && !(unlockPinned && patch.unlock_pinned === true)) {
+      fail(`${page.id}#${section.id} is pinned/read-only; set CLAUDUX_UNLOCK_PINNED_SECTIONS=1 and unlock_pinned=true to patch it`);
+      continue;
+    }
+
+    if (!fs.existsSync(page.path)) {
+      fail(`${page.path} does not exist; create manifest pages before section patching`);
+      continue;
+    }
+
+    const rawBody = patch.body_markdown ?? patch.markdown ?? patch.content;
+    if (typeof rawBody !== 'string') {
+      fail(`${page.id}#${section.id} patch is missing body_markdown`);
+      continue;
+    }
+
+    const original = fs.readFileSync(page.path, 'utf8').replace(/\r\n/g, '\n');
+    const hadFinalNewline = original.endsWith('\n');
+    const lines = original.split('\n');
+    if (hadFinalNewline) lines.pop();
+
+    let span = findSection(lines, section);
+    if (!span) {
+      if (patch.create_if_missing === true) {
+        lines.push('', `${'#'.repeat(section.level)} ${section.heading}`);
+        span = { start: lines.length - 1, end: lines.length };
+      } else {
+        fail(`${page.path} is missing heading "${section.heading}"`);
+        continue;
+      }
+    }
+
+    const body = normalizeBody(rawBody, section);
+    const replacement = [lines[span.start]];
+    if (body.length > 0) {
+      replacement.push('', ...body.split('\n'));
+    }
+    replacement.push('');
+
+    const next = [
+      ...lines.slice(0, span.start),
+      ...replacement,
+      ...lines.slice(span.end),
+    ];
+    const nextContent = `${next.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`;
+
+    fs.mkdirSync(path.dirname(page.path), { recursive: true });
+    fs.writeFileSync(page.path, nextContent);
+    applied.push(`${page.id}#${section.id}`);
+  }
+}
+
+if (errors.length > 0) {
+  for (const error of errors) console.error(`[claudux:patch] ${error}`);
+  process.exit(1);
+}
+
+console.log(`[claudux:patch] applied ${applied.length} section patch(es)`);
+for (const item of applied) console.log(`[claudux:patch] ${item}`);
 NODE
 }
 

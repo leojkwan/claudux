@@ -74,13 +74,18 @@ run_codex_exec() {
     local effort="${CODEX_REASONING_EFFORT:-xhigh}"
     local stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
     local timeout_secs="${CLAUDUX_TIMEOUT:-600}"
+    local sandbox_mode="${CODEX_SANDBOX_MODE:-danger-full-access}"
+
+    if [[ "${CLAUDUX_SECTION_PATCH_MODE:-}" == "1" ]]; then
+        sandbox_mode="${CODEX_SANDBOX_MODE:-read-only}"
+    fi
 
     local codex_args=(
         exec
         -m "$model"
         -c "model_reasoning_effort=\"$effort\""
         -c "approval_policy=\"never\""
-        -c "sandbox_mode=\"danger-full-access\""
+        -c "sandbox_mode=\"$sandbox_mode\""
         --json
     )
 

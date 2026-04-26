@@ -27,11 +27,39 @@ The deterministic pipeline is:
 4. Add the static index summary to the model prompt as authoritative facts.
 5. Use `.claudux-state.json` to find changed files since the previous run.
 6. Resolve changed files through manifest `source_patterns` to the impacted page or section set.
-7. Let the model update only the relevant documentation surface.
-8. Validate `docs-structure.json` again after generation.
-9. Validate the guard snapshot, internal links, and save the checkpoint.
+7. Ask the model for section patch JSON instead of direct documentation writes.
+8. Apply patches only to manifest-owned generated sections.
+9. Validate `docs-structure.json` again after generation.
+10. Validate the guard snapshot, internal links, and save the checkpoint.
 
-The current implementation still allows whole-file writes because the model backends write through Claude Code or Codex. The contract now makes those writes auditable. The next hardening step is section-level patch application keyed by manifest section IDs.
+## Section Patch Application
+
+When `docs-structure.json` exists, claudux switches generation into section patch mode.
+
+In that mode the model gets the static index, manifest impact set, and a strict output contract. It returns JSON between `CLAUDUX_SECTION_PATCHES_JSON_START` and `CLAUDUX_SECTION_PATCHES_JSON_END`:
+
+```json
+{
+  "patches": [
+    {
+      "page_id": "technical.deterministic-generation",
+      "section_id": "section-patch-application",
+      "body_markdown": "Updated markdown body without the heading."
+    }
+  ]
+}
+```
+
+Claudux then applies the patch itself:
+
+- The page ID and section ID must exist in `docs-structure.json`.
+- The target page must already exist on disk.
+- The patch replaces only the body under that manifest heading, ending before the next same-or-higher-level heading.
+- Pinned sections are rejected unless the human explicitly runs with `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` and the patch sets `unlock_pinned: true`.
+- Claude runs with only the `Read` tool in patch mode.
+- Codex runs with a read-only sandbox in patch mode.
+
+This is the practical boundary: the model can propose source-aware wording, but the repository code owns what gets written and where.
 
 ## Static Analysis Index
 
@@ -85,7 +113,7 @@ The model may recommend a manifest change in its plan. Claudux must apply that a
 
 Pinned does not mean frozen wording. It means the section's identity, heading, and place in the page survive reruns.
 
-Allowed:
+Allowed with an explicit manifest or human unlock:
 
 - Updating body text inside a pinned section when source facts changed.
 - Adding generated subsections under an allowed parent.

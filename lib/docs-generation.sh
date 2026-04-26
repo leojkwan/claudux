@@ -587,6 +587,14 @@ update() {
         static_index_context=$(format_static_analysis_index_context)
     fi
 
+    local section_patch_mode=false
+    local section_patch_context=""
+    if declare -F claudux_section_patch_mode_enabled >/dev/null 2>&1 && claudux_section_patch_mode_enabled; then
+        section_patch_mode=true
+        export CLAUDUX_SECTION_PATCH_MODE=1
+        section_patch_context=$(format_section_patch_contract)
+    fi
+
     if declare -F capture_docs_structure_guard_snapshot >/dev/null 2>&1; then
         capture_docs_structure_guard_snapshot || error_exit "Documentation guard snapshot failed"
     fi
@@ -599,6 +607,12 @@ update() {
 
     if [[ -n "$static_index_context" ]]; then
         prompt="${static_index_context}
+
+$prompt"
+    fi
+
+    if [[ -n "$section_patch_context" ]]; then
+        prompt="${section_patch_context}
 
 $prompt"
     fi
@@ -702,25 +716,33 @@ $base_prompt"
 
         # Always be verbose when streaming JSON
         local verbose_flag="--verbose"
+        local allowed_tools="Read,Write,Edit,Delete"
+        local permission_args=(--permission-mode acceptEdits)
+        if $section_patch_mode; then
+            allowed_tools="Read"
+            permission_args=()
+            info "Section patch mode: direct docs writes disabled for Claude"
+        fi
+
+        local output_format_args=()
+        if [[ -n "$output_format_flag" ]]; then
+            output_format_args=(--output-format stream-json)
+        fi
+
+        local claude_args=(
+            --print
+            --model "$model"
+            --allowedTools "$allowed_tools"
+            "${permission_args[@]}"
+            "$verbose_flag"
+            "${output_format_args[@]}"
+            "$prompt"
+        )
 
         if command -v stdbuf &> /dev/null; then
-            ( stdbuf -o0 -e0 claude \
-                --print \
-                --model "$model" \
-                --allowedTools "Read,Write,Edit,Delete" \
-                --permission-mode acceptEdits \
-                $verbose_flag \
-                $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
+            ( stdbuf -o0 -e0 claude "${claude_args[@]}" 2>&1 | tee "$claude_log" ) | $formatter &
         else
-            ( claude \
-                --print \
-                --model "$model" \
-                --allowedTools "Read,Write,Edit,Delete" \
-                --permission-mode acceptEdits \
-                $verbose_flag \
-                $output_format_flag \
-                "$prompt" 2>&1 | tee "$claude_log" ) | $formatter &
+            ( claude "${claude_args[@]}" 2>&1 | tee "$claude_log" ) | $formatter &
         fi
         local stream_pid=$!
 
@@ -755,6 +777,9 @@ $base_prompt"
         # shellcheck disable=SC2034 # codex_model/codex_timeout_msg/codex_effort destructured for future use
         IFS='|' read -r codex_model codex_model_name codex_timeout_msg codex_effort <<< "$(get_codex_model_settings)"
         info "Model: $codex_model_name"
+        if $section_patch_mode; then
+            info "Section patch mode: requesting read-only Codex sandbox"
+        fi
 
         ( run_codex_exec "$prompt" | tee "$claude_log" ) | format_codex_output_stream &
         local stream_pid=$!
@@ -814,6 +839,12 @@ $base_prompt"
     echo ""
     
     if [[ $claude_exit_code -eq 0 ]]; then
+        if $section_patch_mode; then
+            local section_patch_file="${CLAUDUX_SECTION_PATCH_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/section-patches.json}"
+            extract_section_patch_payload "$claude_log" "$section_patch_file" || error_exit "Section patch mode did not produce valid patch JSON"
+            apply_manifest_section_patches "$section_patch_file" || error_exit "Section patch application failed"
+        fi
+
         success "Documentation update complete!"
         echo ""
 
