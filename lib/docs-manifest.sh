@@ -101,6 +101,20 @@ function validateOptionalBoolean(owner, field, label) {
   }
 }
 
+function validateRequiredEnum(owner, field, allowed, label) {
+  if (!Object.prototype.hasOwnProperty.call(owner, field) || typeof owner[field] !== 'string') {
+    fail(`${label}: ${field} must be one of: ${[...allowed].join(', ')}`);
+    return;
+  }
+  if (!allowed.has(owner[field])) {
+    fail(`${label}: ${field} must be one of: ${[...allowed].join(', ')}`);
+  }
+}
+
+const rootDeletionPolicies = new Set(['manifest_pages_require_manifest_change']);
+const generatedSectionDefaults = new Set(['bounded_patch']);
+const pageDeletionPolicies = new Set(['never_delete_without_manifest_change']);
+
 let manifest;
 try {
   manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -112,6 +126,8 @@ try {
 if (manifest) {
   if (!isObject(manifest)) fail('root must be an object');
   if (manifest.version === undefined) fail('missing required "version"');
+  validateRequiredEnum(manifest, 'deletion_policy', rootDeletionPolicies, 'root');
+  validateRequiredEnum(manifest, 'generated_sections_default', generatedSectionDefaults, 'root');
   if (!Array.isArray(manifest.pages) || manifest.pages.length === 0) {
     fail('missing non-empty "pages" array');
   }
@@ -187,9 +203,7 @@ if (manifest) {
       fail(`${label}: missing string title`);
     }
 
-    if (!page.deletion_policy || typeof page.deletion_policy !== 'string') {
-      fail(`${label}: missing string deletion_policy`);
-    }
+    validateRequiredEnum(page, 'deletion_policy', pageDeletionPolicies, label);
 
     if (!Number.isInteger(page.order)) {
       fail(`${label}: order must be an integer`);

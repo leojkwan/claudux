@@ -37,6 +37,8 @@ setup_manifest_repo() {
         printf '%s\n' \
             '{' \
             '  "version": 1,' \
+            '  "deletion_policy": "manifest_pages_require_manifest_change",' \
+            '  "generated_sections_default": "bounded_patch",' \
             '  "navigation": [' \
             '    { "id": "technical", "title": "Technical", "link": "/technical/", "order": 1 },' \
             '    { "id": "api", "title": "API", "link": "/api/", "order": 2 }' \
@@ -694,6 +696,30 @@ assert_contains "string required field fails validation" "$(cat /tmp/claudux-man
 assert_contains "string generated field fails validation" "$(cat /tmp/claudux-manifest-t24)" "generated-details: generated must be a boolean"
 rm -rf "$TEST_DIR"
 
+# --- Test 25: manifest policy fields must use known deterministic enums ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.deletion_policy = 'model_may_delete_unused_pages';
+manifest.generated_sections_default = 'direct_write';
+manifest.pages[0].deletion_policy = 'delete_when_model_says_obsolete';
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t25-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t25-output
+    fi
+) > /tmp/claudux-manifest-t25 2>&1
+assert_contains "unknown root deletion policy fails validation" "$(cat /tmp/claudux-manifest-t25)" "root: deletion_policy must be one of: manifest_pages_require_manifest_change"
+assert_contains "unknown generated section default fails validation" "$(cat /tmp/claudux-manifest-t25)" "root: generated_sections_default must be one of: bounded_patch"
+assert_contains "unknown page deletion policy fails validation" "$(cat /tmp/claudux-manifest-t25)" "technical.deterministic-generation: deletion_policy must be one of: never_delete_without_manifest_change"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
@@ -714,6 +740,7 @@ rm -f /tmp/claudux-manifest-t21 /tmp/claudux-manifest-t21-output
 rm -f /tmp/claudux-manifest-t22-schema /tmp/claudux-manifest-t22-schema-output /tmp/claudux-manifest-t22-disk /tmp/claudux-manifest-t22-disk-output
 rm -f /tmp/claudux-manifest-t23
 rm -f /tmp/claudux-manifest-t24 /tmp/claudux-manifest-t24-output
+rm -f /tmp/claudux-manifest-t25 /tmp/claudux-manifest-t25-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 
