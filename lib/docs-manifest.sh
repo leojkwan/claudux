@@ -94,6 +94,13 @@ function validateSourcePatterns(patterns, label) {
   return hasPatterns;
 }
 
+function validateOptionalBoolean(owner, field, label) {
+  if (!Object.prototype.hasOwnProperty.call(owner, field)) return;
+  if (typeof owner[field] !== 'boolean') {
+    fail(`${label}: ${field} must be a boolean`);
+  }
+}
+
 let manifest;
 try {
   manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -232,6 +239,9 @@ if (manifest) {
         }
       }
       validateSourcePatterns(section.source_patterns, sectionLabel);
+      validateOptionalBoolean(section, 'pinned', sectionLabel);
+      validateOptionalBoolean(section, 'generated', sectionLabel);
+      validateOptionalBoolean(section, 'required', sectionLabel);
       if (section.pinned === true) pinnedSections += 1;
     }
 

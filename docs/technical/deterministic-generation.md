@@ -169,6 +169,7 @@ Manifest validation has two modes:
 
 - Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, section IDs, and unambiguous section `level + heading` anchors.
 - Manifest `source_patterns` must be repo-root relative. Absolute paths and `..` traversal are rejected so incremental scope does not depend on where a worktree is checked out.
+- Section authority fields such as `pinned`, `generated`, and `required` must be JSON booleans, not strings. A typo like `"pinned": "true"` cannot silently disable pinned-section guards.
 - Post-generation also verifies every manifest page exists, every required or pinned heading still appears on disk, and every manifest section heading appears at most once at its declared level.
 
 The guard snapshot adds the preservation check that schema validation cannot prove by itself:

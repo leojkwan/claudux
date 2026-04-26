@@ -670,6 +670,30 @@ assert_contains "prompt keeps docs-map as supplemental legacy guidance" "$(cat /
 assert_not_contains "prompt does not demote docs-map to primary loose guidance" "$(cat /tmp/claudux-manifest-t23)" "Read docs-map.md for loose documentation guidance"
 rm -rf "$TEST_DIR"
 
+# --- Test 24: manifest boolean authority fields must be real booleans ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.pages[0].sections[0].pinned = 'true';
+manifest.pages[0].sections[1].required = 'false';
+manifest.pages[0].sections[2].generated = 'false';
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t24-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t24-output
+    fi
+) > /tmp/claudux-manifest-t24 2>&1
+assert_contains "string pinned field fails validation" "$(cat /tmp/claudux-manifest-t24)" "pipeline: pinned must be a boolean"
+assert_contains "string required field fails validation" "$(cat /tmp/claudux-manifest-t24)" "strongyes-harness-example: required must be a boolean"
+assert_contains "string generated field fails validation" "$(cat /tmp/claudux-manifest-t24)" "generated-details: generated must be a boolean"
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
@@ -689,6 +713,7 @@ rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-ma
 rm -f /tmp/claudux-manifest-t21 /tmp/claudux-manifest-t21-output
 rm -f /tmp/claudux-manifest-t22-schema /tmp/claudux-manifest-t22-schema-output /tmp/claudux-manifest-t22-disk /tmp/claudux-manifest-t22-disk-output
 rm -f /tmp/claudux-manifest-t23
+rm -f /tmp/claudux-manifest-t24 /tmp/claudux-manifest-t24-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 
