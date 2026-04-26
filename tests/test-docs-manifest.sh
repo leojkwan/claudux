@@ -398,34 +398,106 @@ NODE
 assert_contains "section patch extraction captures payload" "$(cat /tmp/claudux-manifest-t13)" "1:generated-details:Extracted body."
 rm -rf "$TEST_DIR"
 
-# --- Test 13b: section patch payload extraction rejects multiple marker pairs ---
+# --- Test 13b: section patch payload extraction tolerates repeated identical marker pairs ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
     source "$LIB_DIR/docs-manifest.sh"
-    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}\nCLAUDUX_SECTION_PATCHES_JSON_END\nCLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' > /tmp/claudux-manifest-t13b-log.jsonl
-    if extract_section_patch_payload /tmp/claudux-manifest-t13b-log.jsonl /tmp/claudux-manifest-t13b-patches.json >/tmp/claudux-manifest-t13b-output 2>&1; then
-        echo "unexpected-pass"
-    else
-        cat /tmp/claudux-manifest-t13b-output
-    fi
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Repeated body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END\nCLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Repeated body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' > /tmp/claudux-manifest-t13b-log.jsonl
+    extract_section_patch_payload /tmp/claudux-manifest-t13b-log.jsonl /tmp/claudux-manifest-t13b-patches.json
+    node - /tmp/claudux-manifest-t13b-patches.json <<'NODE'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+console.log(`${payload.patches.length}:${payload.patches[0].section_id}:${payload.patches[0].body_markdown}`);
+NODE
 ) > /tmp/claudux-manifest-t13b 2>&1
-assert_contains "section patch extraction rejects multiple payloads" "$(cat /tmp/claudux-manifest-t13b)" "expected exactly one section patch payload marker pair"
+assert_contains "section patch extraction deduplicates repeated marker pairs" "$(cat /tmp/claudux-manifest-t13b)" "1:generated-details:Repeated body."
 rm -rf "$TEST_DIR"
 
-# --- Test 13c: section patch payload extraction rejects orphaned markers ---
+# --- Test 13c: section patch payload extraction rejects conflicting marker pairs ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
     source "$LIB_DIR/docs-manifest.sh"
-    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}"}' > /tmp/claudux-manifest-t13c-log.jsonl
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"First body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END\nCLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Second body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' > /tmp/claudux-manifest-t13c-log.jsonl
     if extract_section_patch_payload /tmp/claudux-manifest-t13c-log.jsonl /tmp/claudux-manifest-t13c-patches.json >/tmp/claudux-manifest-t13c-output 2>&1; then
         echo "unexpected-pass"
     else
         cat /tmp/claudux-manifest-t13c-output
     fi
 ) > /tmp/claudux-manifest-t13c 2>&1
-assert_contains "section patch extraction rejects orphaned markers" "$(cat /tmp/claudux-manifest-t13c)" "section patch payload markers must be paired"
+assert_contains "section patch extraction rejects conflicting repeated payloads" "$(cat /tmp/claudux-manifest-t13c)" "expected exactly one unique section patch payload"
+rm -rf "$TEST_DIR"
+
+# --- Test 13d: section patch payload extraction rejects orphaned markers ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' '{"type":"result","result":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[]}"}' > /tmp/claudux-manifest-t13d-log.jsonl
+    if extract_section_patch_payload /tmp/claudux-manifest-t13d-log.jsonl /tmp/claudux-manifest-t13d-patches.json >/tmp/claudux-manifest-t13d-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t13d-output
+    fi
+) > /tmp/claudux-manifest-t13d 2>&1
+assert_contains "section patch extraction rejects orphaned markers" "$(cat /tmp/claudux-manifest-t13d)" "section patch payload markers must be paired"
+rm -rf "$TEST_DIR"
+
+# --- Test 13e: section patch payload extraction tolerates duplicate JSONL echoes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{"type":"item.completed","item":{"type":"agent_message","text":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Echoed body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}}' \
+        '{"type":"result","message":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Echoed body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' \
+        > /tmp/claudux-manifest-t13d-log.jsonl
+    extract_section_patch_payload /tmp/claudux-manifest-t13d-log.jsonl /tmp/claudux-manifest-t13d-patches.json
+    node - /tmp/claudux-manifest-t13d-patches.json <<'NODE'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+console.log(`${payload.patches.length}:${payload.patches[0].section_id}:${payload.patches[0].body_markdown}`);
+NODE
+) > /tmp/claudux-manifest-t13e 2>&1
+assert_contains "section patch extraction deduplicates echoed payloads" "$(cat /tmp/claudux-manifest-t13e)" "1:generated-details:Echoed body."
+rm -rf "$TEST_DIR"
+
+# --- Test 13f: section patch payload extraction rejects conflicting JSONL echoes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{"type":"item.completed","item":{"type":"agent_message","text":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"First body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}}' \
+        '{"type":"result","message":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Second body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}' \
+        > /tmp/claudux-manifest-t13e-log.jsonl
+    if extract_section_patch_payload /tmp/claudux-manifest-t13e-log.jsonl /tmp/claudux-manifest-t13e-patches.json >/tmp/claudux-manifest-t13e-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t13e-output
+    fi
+) > /tmp/claudux-manifest-t13e 2>&1
+assert_contains "section patch extraction rejects conflicting payload echoes" "$(cat /tmp/claudux-manifest-t13e)" "expected exactly one unique section patch payload"
+rm -rf "$TEST_DIR"
+
+# --- Test 13g: section patch payload extraction ignores truncated summary previews ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        '{"type":"item.completed","item":{"type":"agent_message","text":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\",\"section_id\":\"generated-details\",\"body_markdown\":\"Summary-safe body.\"}]}\nCLAUDUX_SECTION_PATCHES_JSON_END"}}' \
+        '{"type":"turn.completed","summary":"CLAUDUX_SECTION_PATCHES_JSON_START\n{\"patches\":[{\"page_id\":\"technical.deterministic-generation\""}' \
+        > /tmp/claudux-manifest-t13g-log.jsonl
+    extract_section_patch_payload /tmp/claudux-manifest-t13g-log.jsonl /tmp/claudux-manifest-t13g-patches.json
+    node - /tmp/claudux-manifest-t13g-patches.json <<'NODE'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+console.log(`${payload.patches.length}:${payload.patches[0].section_id}:${payload.patches[0].body_markdown}`);
+NODE
+) > /tmp/claudux-manifest-t13g 2>&1
+assert_contains "section patch extraction ignores truncated summary markers" "$(cat /tmp/claudux-manifest-t13g)" "1:generated-details:Summary-safe body."
 rm -rf "$TEST_DIR"
 
 # --- Test 14: incremental impact allowlist blocks unrelated generated sections ---

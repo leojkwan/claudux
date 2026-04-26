@@ -860,7 +860,7 @@ function collectStrings(value) {
   }
   if (value && typeof value === 'object') {
     for (const [key, nested] of Object.entries(value)) {
-      if (['text', 'content', 'result', 'message', 'summary'].includes(key)) {
+      if (['text', 'content', 'result', 'message'].includes(key)) {
         collectStrings(nested);
       } else if (typeof nested === 'object') {
         collectStrings(nested);
@@ -878,37 +878,60 @@ for (const line of raw.split(/\r?\n/)) {
   }
 }
 
-const text = chunks.join('\n');
 const startMarker = 'CLAUDUX_SECTION_PATCHES_JSON_START';
 const endMarker = 'CLAUDUX_SECTION_PATCHES_JSON_END';
 
-function countMarker(marker) {
+function countMarker(text, marker) {
   return text.split(marker).length - 1;
 }
 
-const startCount = countMarker(startMarker);
-const endCount = countMarker(endMarker);
-if (startCount === 0 && endCount === 0) {
+function collectPayloadsFromText(text) {
+  const startCount = countMarker(text, startMarker);
+  const endCount = countMarker(text, endMarker);
+  if (startCount === 0 && endCount === 0) {
+    return [];
+  }
+  if (startCount !== endCount) {
+    console.error(`[claudux:patch] section patch payload markers must be paired (found ${startCount} start, ${endCount} end)`);
+    process.exit(1);
+  }
+
+  const firstStartIndex = text.indexOf(startMarker);
+  const firstEndIndex = text.indexOf(endMarker);
+  if (firstEndIndex < firstStartIndex) {
+    console.error('[claudux:patch] section patch payload end marker appears before start marker');
+    process.exit(1);
+  }
+
+  const payloads = [];
+  let cursor = 0;
+  for (let i = 0; i < startCount; i += 1) {
+    const startIndex = text.indexOf(startMarker, cursor);
+    const endIndex = text.indexOf(endMarker, startIndex + startMarker.length);
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+      console.error('[claudux:patch] section patch payload markers must be paired');
+      process.exit(1);
+    }
+    payloads.push(text.slice(startIndex + startMarker.length, endIndex).trim());
+    cursor = endIndex + endMarker.length;
+  }
+
+  return payloads;
+}
+
+const payloadTexts = collectPayloadsFromText(chunks.join('\n'));
+
+if (payloadTexts.length === 0) {
   console.error('[claudux:patch] missing section patch payload markers');
   process.exit(1);
 }
-if (startCount !== endCount) {
-  console.error(`[claudux:patch] section patch payload markers must be paired (found ${startCount} start, ${endCount} end)`);
-  process.exit(1);
-}
-if (startCount !== 1) {
-  console.error(`[claudux:patch] expected exactly one section patch payload marker pair, found ${startCount}`);
+const uniquePayloadTexts = [...new Set(payloadTexts)];
+if (uniquePayloadTexts.length !== 1) {
+  console.error(`[claudux:patch] expected exactly one unique section patch payload, found ${uniquePayloadTexts.length}`);
   process.exit(1);
 }
 
-const startIndex = text.indexOf(startMarker);
-const endIndex = text.indexOf(endMarker);
-if (endIndex < startIndex) {
-  console.error('[claudux:patch] section patch payload end marker appears before start marker');
-  process.exit(1);
-}
-
-let payloadText = text.slice(startIndex + startMarker.length, endIndex).trim();
+let payloadText = uniquePayloadTexts[0];
 payloadText = payloadText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
 let payload;
