@@ -130,6 +130,8 @@ Policy fields are enums, not free-form prose. The root `deletion_policy` must be
 
 Navigation fields are manifest-owned too. Each navigation item needs a non-empty `title`, a root-relative `link`, and that link must resolve to a page path declared in the same manifest.
 
+Manifest IDs are API keys, not display copy. Navigation IDs, page IDs, section IDs, and page `nav_group` values must use stable key syntax such as `technical.deterministic-generation` or `section-patch-application`; whitespace, slashes, and `#` delimiters are rejected before patching or impacted-doc allowlists depend on them.
+
 ## Pinned Pages and Sections
 
 Pinned does not mean frozen wording. It means the section's identity, heading, and place in the page survive reruns.
@@ -177,6 +179,7 @@ Manifest validation has two modes:
 
 - Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, section IDs, and unambiguous section `level + heading` anchors.
 - Navigation links must be root-relative docs links and must resolve to manifest pages, so placeholder or external nav targets fail before a model can treat them as structure.
+- Navigation IDs, page IDs, section IDs, and page `nav_group` values must be stable manifest keys because patch batches and incremental allowlists address sections as `page_id#section_id`.
 - Manifest policy fields are strict enums. Unknown deletion policies or generated-section defaults fail before cleanup, recreate, or generation can treat them as operational authority.
 - Manifest `source_patterns` must be repo-root relative. Absolute paths and `..` traversal are rejected so incremental scope does not depend on where a worktree is checked out.
 - Section authority fields such as `pinned`, `generated`, and `required` must be JSON booleans, not strings. A typo like `"pinned": "true"` cannot silently disable pinned-section guards.
