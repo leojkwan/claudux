@@ -80,6 +80,15 @@ function validateSourcePatterns(patterns, label) {
       fail(`${label}: source_patterns[${patternIndex}] must not be empty`);
       continue;
     }
+    const normalizedPattern = pattern.replace(/\\/g, '/');
+    if (
+      normalizedPattern.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalizedPattern) ||
+      normalizedPattern.split('/').includes('..')
+    ) {
+      fail(`${label}: source_patterns[${patternIndex}] must be repo-root relative and cannot use absolute paths or .. segments`);
+      continue;
+    }
     hasPatterns = true;
   }
   return hasPatterns;

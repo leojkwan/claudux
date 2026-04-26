@@ -166,6 +166,7 @@ That distinction matters on large codebases where one source file has known depe
 Manifest validation has two modes:
 
 - Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, section IDs, and unambiguous section `level + heading` anchors.
+- Manifest `source_patterns` must be repo-root relative. Absolute paths and `..` traversal are rejected so incremental scope does not depend on where a worktree is checked out.
 - Post-generation also verifies every manifest page exists, every required or pinned heading still appears on disk, and every manifest section heading appears at most once at its declared level.
 
 The guard snapshot adds the preservation check that schema validation cannot prove by itself:
@@ -187,7 +188,7 @@ The local loop in `CLAUDE.md` points agents at `npm run db:start`, `npm run db:r
 
 The Playwright seed path is even more structure-sensitive. `e2e/fixtures/staging-seed.ts` is idempotent: it resolves or creates the canonical user, inserts only missing game-plan cards, inserts only missing memories, and refuses to seed the production Supabase ref. `e2e/fixtures/global-setup.ts` treats missing env as an opted-out no-op but propagates the production guard.
 
-That doctrine should not be rewritten as generic "run your tests" content. It needs source-owned sections:
+That doctrine should not be rewritten as generic "run your tests" content. In the StrongYes repo itself, it needs source-owned sections:
 
 - Local Supabase lifecycle owned by `scripts/run-local-supabase-test.mjs`.
 - Idempotent seed semantics owned by `e2e/fixtures/staging-seed.ts`.
@@ -195,6 +196,8 @@ That doctrine should not be rewritten as generic "run your tests" content. It ne
 - Playwright setup behavior owned by `e2e/fixtures/global-setup.ts` and `playwright.config.ts`.
 
 When those files change, the docs should update those sections. When unrelated UI files change, the harness doctrine should survive untouched.
+
+Claudux's own `docs-structure.json` keeps this section pinned as doctrine, but it does not use `../strongyes-web/...` as `source_patterns`. Cross-repo example files are evidence in prose, not worktree-relative incremental ownership keys.
 
 ## Checkpoint Contract
 

@@ -535,7 +535,29 @@ assert_contains "empty source pattern fails validation" "$(cat /tmp/claudux-mani
 assert_contains "non-string section source pattern fails validation" "$(cat /tmp/claudux-manifest-t19)" "source_patterns[1] must be a string"
 rm -rf "$TEST_DIR"
 
-# --- Test 20: manifest rejects duplicate deterministic order values ---
+# --- Test 20: manifest rejects source patterns that escape the repo root ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.pages[0].source_patterns.push('/tmp/outside.sh');
+manifest.pages[0].sections[0].source_patterns.push('../strongyes-web/scripts/run-local-supabase-test.mjs');
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t20-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t20-output
+    fi
+) > /tmp/claudux-manifest-t20 2>&1
+assert_contains "absolute source pattern fails validation" "$(cat /tmp/claudux-manifest-t20)" "source_patterns[2] must be repo-root relative"
+assert_contains "parent traversal source pattern fails validation" "$(cat /tmp/claudux-manifest-t20)" "source_patterns[1] must be repo-root relative"
+rm -rf "$TEST_DIR"
+
+# --- Test 21: manifest rejects duplicate deterministic order values ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
@@ -547,17 +569,17 @@ manifest.pages[1].order = manifest.pages[0].order;
 fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
     source "$LIB_DIR/docs-manifest.sh"
-    if validate_docs_structure_manifest >/tmp/claudux-manifest-t20-output 2>&1; then
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t21-output 2>&1; then
         echo "unexpected-pass"
     else
-        cat /tmp/claudux-manifest-t20-output
+        cat /tmp/claudux-manifest-t21-output
     fi
-) > /tmp/claudux-manifest-t20 2>&1
-assert_contains "duplicate navigation order fails validation" "$(cat /tmp/claudux-manifest-t20)" "duplicate navigation order 1"
-assert_contains "duplicate page order fails validation" "$(cat /tmp/claudux-manifest-t20)" "duplicate page order 110"
+) > /tmp/claudux-manifest-t21 2>&1
+assert_contains "duplicate navigation order fails validation" "$(cat /tmp/claudux-manifest-t21)" "duplicate navigation order 1"
+assert_contains "duplicate page order fails validation" "$(cat /tmp/claudux-manifest-t21)" "duplicate page order 110"
 rm -rf "$TEST_DIR"
 
-# --- Test 21: manifest section heading anchors must stay unambiguous ---
+# --- Test 22: manifest section heading anchors must stay unambiguous ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
@@ -569,13 +591,13 @@ manifest.pages[0].sections[1].level = manifest.pages[0].sections[0].level;
 fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
     source "$LIB_DIR/docs-manifest.sh"
-    if validate_docs_structure_manifest >/tmp/claudux-manifest-t21-schema-output 2>&1; then
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t22-schema-output 2>&1; then
         echo "unexpected-schema-pass"
     else
-        cat /tmp/claudux-manifest-t21-schema-output
+        cat /tmp/claudux-manifest-t22-schema-output
     fi
-) > /tmp/claudux-manifest-t21-schema 2>&1
-assert_contains "duplicate manifest section anchor fails validation" "$(cat /tmp/claudux-manifest-t21-schema)" 'duplicate section heading anchor h2 "Pipeline"'
+) > /tmp/claudux-manifest-t22-schema 2>&1
+assert_contains "duplicate manifest section anchor fails validation" "$(cat /tmp/claudux-manifest-t22-schema)" 'duplicate section heading anchor h2 "Pipeline"'
 rm -rf "$TEST_DIR"
 
 TEST_DIR=$(setup_manifest_repo)
@@ -583,16 +605,16 @@ TEST_DIR=$(setup_manifest_repo)
     cd "$TEST_DIR"
     printf '\n## Generated Details\n\nAmbiguous generated body.\n' >> docs/technical/deterministic-generation.md
     source "$LIB_DIR/docs-manifest.sh"
-    if validate_docs_structure_manifest --post-generation >/tmp/claudux-manifest-t21-disk-output 2>&1; then
+    if validate_docs_structure_manifest --post-generation >/tmp/claudux-manifest-t22-disk-output 2>&1; then
         echo "unexpected-disk-pass"
     else
-        cat /tmp/claudux-manifest-t21-disk-output
+        cat /tmp/claudux-manifest-t22-disk-output
     fi
-) > /tmp/claudux-manifest-t21-disk 2>&1
-assert_contains "duplicate on-disk section anchor fails post-generation validation" "$(cat /tmp/claudux-manifest-t21-disk)" 'duplicate manifest heading anchor h2 "Generated Details"'
+) > /tmp/claudux-manifest-t22-disk 2>&1
+assert_contains "duplicate on-disk section anchor fails post-generation validation" "$(cat /tmp/claudux-manifest-t22-disk)" 'duplicate manifest heading anchor h2 "Generated Details"'
 rm -rf "$TEST_DIR"
 
-# --- Test 22: docs-structure.json takes prompt precedence over legacy docs-map.md ---
+# --- Test 23: docs-structure.json takes prompt precedence over legacy docs-map.md ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
@@ -600,10 +622,10 @@ TEST_DIR=$(setup_manifest_repo)
     source "$LIB_DIR/docs-manifest.sh"
     source "$LIB_DIR/docs-generation.sh"
     build_generation_prompt "generic" "Prompt Precedence Test"
-) > /tmp/claudux-manifest-t22 2>&1
-assert_contains "prompt reads docs-structure as deterministic manifest when docs-map also exists" "$(cat /tmp/claudux-manifest-t22)" "Read docs-structure.json as the deterministic docs manifest"
-assert_contains "prompt keeps docs-map as supplemental legacy guidance" "$(cat /tmp/claudux-manifest-t22)" "Read docs-map.md as supplemental legacy guidance only"
-assert_not_contains "prompt does not demote docs-map to primary loose guidance" "$(cat /tmp/claudux-manifest-t22)" "Read docs-map.md for loose documentation guidance"
+) > /tmp/claudux-manifest-t23 2>&1
+assert_contains "prompt reads docs-structure as deterministic manifest when docs-map also exists" "$(cat /tmp/claudux-manifest-t23)" "Read docs-structure.json as the deterministic docs manifest"
+assert_contains "prompt keeps docs-map as supplemental legacy guidance" "$(cat /tmp/claudux-manifest-t23)" "Read docs-map.md as supplemental legacy guidance only"
+assert_not_contains "prompt does not demote docs-map to primary loose guidance" "$(cat /tmp/claudux-manifest-t23)" "Read docs-map.md for loose documentation guidance"
 rm -rf "$TEST_DIR"
 
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
@@ -621,8 +643,9 @@ rm -f /tmp/claudux-manifest-t13c /tmp/claudux-manifest-t13c-log.jsonl /tmp/claud
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
 rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output
-rm -f /tmp/claudux-manifest-t21-schema /tmp/claudux-manifest-t21-schema-output /tmp/claudux-manifest-t21-disk /tmp/claudux-manifest-t21-disk-output
-rm -f /tmp/claudux-manifest-t22
+rm -f /tmp/claudux-manifest-t21 /tmp/claudux-manifest-t21-output
+rm -f /tmp/claudux-manifest-t22-schema /tmp/claudux-manifest-t22-schema-output /tmp/claudux-manifest-t22-disk /tmp/claudux-manifest-t22-disk-output
+rm -f /tmp/claudux-manifest-t23
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

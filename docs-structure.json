@@ -212,11 +212,7 @@
           "id": "strongyes-harness-example",
           "heading": "StrongYes Harness Example",
           "level": 2,
-          "pinned": true,
-          "source_patterns": [
-            "../strongyes-web/scripts/run-local-supabase-test.mjs",
-            "../strongyes-web/e2e/fixtures/staging-seed.ts"
-          ]
+          "pinned": true
         },
         {
           "id": "checkpoint-contract",
