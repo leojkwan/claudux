@@ -1,6 +1,6 @@
 # Getting Started
 
-Claudux is an AI-powered documentation generator that analyzes your codebase and creates comprehensive VitePress documentation sites automatically.
+Claudux is an AI-assisted documentation generator that analyzes your codebase and creates VitePress documentation sites automatically.
 
 ## Installation
 
@@ -37,7 +37,7 @@ When you run `claudux update` for the first time:
 
 1. **Project Detection**: Automatically detects your project type (React, Next.js, Python, etc.)
 2. **Code Analysis**: Scans source files to understand structure and patterns
-3. **Documentation Generation**: Creates comprehensive docs with proper navigation
+3. **Documentation Generation**: Creates docs with proper navigation
 4. **Link Validation**: Ensures all internal links work correctly
 
 ## Interactive Menu
@@ -48,7 +48,7 @@ Run `claudux` without arguments to access the interactive menu:
 $ claudux
 
 📚 claudux - Your Project Documentation  
-Powered by Claude AI - Everything stays local
+Powered by Claude AI - Local CLI orchestration
 
 Select:
 

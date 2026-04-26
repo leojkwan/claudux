@@ -4,7 +4,7 @@ layout: home
 hero:
   name: claudux
   text: Your docs write themselves
-  tagline: AI-powered documentation generator that analyzes your codebase and generates comprehensive, navigable docs that stay in sync with your code
+  tagline: AI-assisted documentation generator that analyzes your codebase and updates navigable docs with your code
   actions:
     - theme: brand
       text: Get Started
@@ -27,8 +27,8 @@ features:
     details: One command generates complete VitePress sites with navigation, search, and mobile-friendly design.
   
   - icon: 🔒
-    title: Runs Locally
-    details: Your code never leaves your machine. Everything processes locally for complete privacy.
+    title: Local Orchestration
+    details: The CLI runs on your machine and uses your authenticated Claude or Codex backend for model work.
   
   - icon: 🍰
     title: Zero Config

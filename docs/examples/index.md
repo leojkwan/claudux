@@ -20,7 +20,7 @@ claudux serve  # Opens http://localhost:5173
 **Expected output:**
 ```
 📚 claudux - my-awesome-app Documentation
-Powered by Claude AI - Everything stays local
+Powered by Claude AI - Local CLI orchestration
 
 📊 Starting documentation update and cleanup...
 
