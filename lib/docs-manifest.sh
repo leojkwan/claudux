@@ -306,6 +306,7 @@ const index = {
         sections: (page.sections || []).map(section => ({
           section_id: section.id,
           heading: section.heading,
+          level: section.level,
           pinned: section.pinned === true,
           source_patterns: section.source_patterns || [],
         })),

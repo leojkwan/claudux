@@ -2,6 +2,133 @@
 # Documentation generation and update functions
 
 STATE_FILE=".claudux-state.json"
+CLAUDUX_PROMPT_VERSION="${CLAUDUX_PROMPT_VERSION:-docs-generation-v1}"
+
+# Build deterministic checkpoint metadata from the static analysis index.
+# This stays best-effort so state saving never fails after successful docs output.
+build_deterministic_state_metadata_json() {
+    local prompt_version="${CLAUDUX_PROMPT_VERSION:-docs-generation-v1}"
+    local index_file="${CLAUDUX_STATIC_INDEX_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/static-analysis.json}"
+
+    if ! command -v node >/dev/null 2>&1; then
+        printf '{"prompt_version":"%s","index":null,"manifest_hash":null,"source_hashes":[],"doc_section_hashes":[],"source_to_section_coverage":[]}' "$prompt_version"
+        return 0
+    fi
+
+    node - "$prompt_version" "$index_file" <<'NODE'
+const fs = require('fs');
+const crypto = require('crypto');
+
+const promptVersion = process.argv[2];
+const indexFile = process.argv[3];
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function fallback(error) {
+  return {
+    prompt_version: promptVersion,
+    index: null,
+    manifest_hash: null,
+    source_hashes: [],
+    doc_section_hashes: [],
+    source_to_section_coverage: [],
+    error: error ? String(error.message || error) : undefined,
+  };
+}
+
+function sectionHash(pagePath, section) {
+  if (!section || !section.heading || !section.level || !fs.existsSync(pagePath)) {
+    return null;
+  }
+
+  const lines = fs.readFileSync(pagePath, 'utf8').split(/\r?\n/);
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
+  );
+  const start = lines.findIndex(line => headingPattern.test(line));
+  if (start === -1) return null;
+
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const match = lines[i].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= section.level) {
+      end = i;
+      break;
+    }
+  }
+
+  return sha256(lines.slice(start, end).join('\n'));
+}
+
+let metadata = fallback();
+
+try {
+  if (fs.existsSync(indexFile)) {
+    const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+    const ownership = Array.isArray(index.source_ownership) ? index.source_ownership : [];
+
+    metadata = {
+      prompt_version: promptVersion,
+      index: {
+        path: indexFile,
+        version: index.version ?? null,
+        head_sha: index.head_sha ?? null,
+      },
+      manifest_hash: index.manifest?.sha256 ?? null,
+      source_hashes: Array.isArray(index.source_files)
+        ? index.source_files.map(file => ({ path: file.path, sha256: file.sha256 }))
+        : [],
+      doc_section_hashes: [],
+      source_to_section_coverage: [],
+    };
+
+    for (const page of ownership) {
+      for (const pattern of page.source_patterns || []) {
+        metadata.source_to_section_coverage.push({
+          source_pattern: pattern,
+          page_id: page.page_id,
+          section_id: null,
+          path: page.path,
+        });
+      }
+
+      for (const section of page.sections || []) {
+        for (const pattern of section.source_patterns || []) {
+          metadata.source_to_section_coverage.push({
+            source_pattern: pattern,
+            page_id: page.page_id,
+            section_id: section.section_id,
+            path: page.path,
+          });
+        }
+
+        const digest = sectionHash(page.path, section);
+        if (digest) {
+          metadata.doc_section_hashes.push({
+            path: page.path,
+            page_id: page.page_id,
+            section_id: section.section_id,
+            heading: section.heading,
+            pinned: section.pinned === true,
+            sha256: digest,
+          });
+        }
+      }
+    }
+  }
+} catch (error) {
+  metadata = fallback(error);
+}
+
+console.log(JSON.stringify(metadata, null, 2));
+NODE
+}
 
 # Save a change-tracking checkpoint after successful doc generation.
 # Records HEAD SHA, timestamp, backend used, and which files were documented.
@@ -11,6 +138,8 @@ save_claudux_state() {
     local timestamp
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local backend="${CLAUDUX_BACKEND:-claude}"
+    local deterministic_state
+    deterministic_state=$(build_deterministic_state_metadata_json)
 
     # Collect documented files (everything under docs/ tracked by git + untracked new)
     local files_json="[]"
@@ -33,7 +162,8 @@ save_claudux_state() {
   "last_sha": "$head_sha",
   "last_run": "$timestamp",
   "backend": "$backend",
-  "files_documented": $files_json
+  "files_documented": $files_json,
+  "deterministic": $deterministic_state
 }
 EOJSON
     info "Checkpoint saved to $STATE_FILE (sha: ${head_sha:0:7})"
