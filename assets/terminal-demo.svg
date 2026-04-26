@@ -43,7 +43,7 @@
     <text class="white" y="36">📚 claudux - my-project Documentation</text>
 
     <!-- Line 4: subheader -->
-    <text class="dim" y="54">Powered by Claude AI - Everything stays local</text>
+    <text class="dim" y="54">Powered by Claude AI - Local CLI orchestration</text>
 
     <!-- Line 5: blank -->
 

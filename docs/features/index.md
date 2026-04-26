@@ -45,15 +45,15 @@ claudux update  # Generates VitePress site with navigation, search, mobile suppo
 - Auto-generated breadcrumbs
 - Dark/light theme toggle
 
-### 🔒 Privacy First
+### 🔒 Local Orchestration
 
-**Problem**: Cloud-based tools require uploading your source code.
+**Problem**: Docs tools should be explicit about where orchestration runs and which model backend is used.
 
-**Solution**: Everything runs locally:
-- Code never leaves your machine
-- Uses locally installed Claude CLI
-- Processes files in your environment
-- No external API calls for source analysis
+**Solution**: Claudux runs as a local CLI and delegates model work to your selected authenticated backend:
+- Reads files from your local checkout
+- Uses locally installed Claude or Codex CLI
+- Processes generated docs in your environment
+- Sends prompt context through the selected backend CLI
 
 ### 🍰 Zero Configuration
 
