@@ -23,7 +23,7 @@ The deterministic pipeline is:
 
 1. Validate `docs-structure.json` before generation.
 2. Build `.claudux/index/static-analysis.json` from tracked source files, docs files, package scripts, markdown headings, and manifest ownership.
-3. Capture a guard snapshot for pinned heading order and protected skip-marker blocks.
+3. Capture a guard snapshot for pinned heading order, pinned/read-only section body hashes, and protected skip-marker blocks.
 4. Add the static index summary to the model prompt as authoritative facts.
 5. Use `.claudux-state.json` to find changed files since the previous run.
 6. Resolve changed files through manifest `source_patterns` to the impacted page or section set and write `.claudux/index/impacted-docs.json`.
@@ -162,6 +162,7 @@ Manifest validation has two modes:
 The guard snapshot adds the preservation check that schema validation cannot prove by itself:
 
 - Pinned headings must remain in manifest order within their page.
+- Pinned/read-only section bodies must keep the same hash unless `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` is set for an intentional human override.
 - Existing `<!-- skip -->` blocks must keep the same content hash.
 - A model can still improve generated prose, but it cannot erase hand-written doctrine behind skip markers and pass validation.
 

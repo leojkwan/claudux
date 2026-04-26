@@ -234,6 +234,25 @@ TEST_DIR=$(setup_manifest_repo)
 assert_contains "guard snapshot catches pinned heading reorder" "$(cat /tmp/claudux-manifest-t9)" "pinned heading order changed"
 rm -rf "$TEST_DIR"
 
+# --- Test 9b: guard snapshot fails when a pinned section body changes without unlock ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    capture_docs_structure_guard_snapshot >/tmp/claudux-manifest-t9b-output
+    printf '# Deterministic Generation\n\n## Pipeline\n\nRewritten generic test advice.\n\n## StrongYes Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n\n## Unrelated Generated\n\nUnrelated body.\n' > docs/technical/deterministic-generation.md
+    if validate_docs_structure_guard_snapshot >/tmp/claudux-manifest-t9b-validate 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t9b-validate
+    fi
+    CLAUDUX_UNLOCK_PINNED_SECTIONS=1 validate_docs_structure_guard_snapshot
+) > /tmp/claudux-manifest-t9b 2>&1
+assert_contains "guard snapshot catches pinned body rewrite" "$(cat /tmp/claudux-manifest-t9b)" "pinned section body changed"
+assert_contains "guard snapshot permits explicit pinned unlock" "$(cat /tmp/claudux-manifest-t9b)" "[claudux:guard] ok"
+rm -rf "$TEST_DIR"
+
 # --- Test 10: section patch contract lists generated sections and pins read-only doctrine ---
 TEST_DIR=$(setup_manifest_repo)
 (
@@ -493,6 +512,7 @@ rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16 /tmp/claudux-manifest-
 rm -f /tmp/claudux-manifest-t3-output /tmp/claudux-manifest-t4-output /tmp/claudux-manifest-t6-output
 rm -f /tmp/claudux-manifest-t7-output /tmp/claudux-manifest-t8-output /tmp/claudux-manifest-t8-validate
 rm -f /tmp/claudux-manifest-t9-output /tmp/claudux-manifest-t9-validate
+rm -f /tmp/claudux-manifest-t9b /tmp/claudux-manifest-t9b-output /tmp/claudux-manifest-t9b-validate
 rm -f /tmp/claudux-manifest-t12-output /tmp/claudux-manifest-t13-log.jsonl /tmp/claudux-manifest-t13-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output

@@ -1012,6 +1012,30 @@ function findHeading(content, section) {
   return content.slice(0, match.index).split(/\r?\n/).length;
 }
 
+function sectionBodyDigest(content, section) {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
+  );
+  const start = lines.findIndex(line => headingPattern.test(line));
+  if (start === -1) return null;
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= section.level) {
+      end = index;
+      break;
+    }
+  }
+
+  const body = lines.slice(start + 1, end).join('\n').trim();
+  return {
+    sha256: sha256(body),
+    preview: body.split('\n').slice(0, 3).join('\\n'),
+  };
+}
+
 function walkMarkdown(dir) {
   if (!fs.existsSync(dir)) return [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -1053,12 +1077,17 @@ if (manifest && Array.isArray(manifest.pages)) {
     const content = fs.readFileSync(page.path, 'utf8');
     const sections = (page.sections || [])
       .filter(section => section && (section.pinned === true || section.required !== false))
-      .map(section => ({
-        id: section.id,
-        heading: section.heading,
-        level: section.level,
-        line: findHeading(content, section),
-      }));
+      .map(section => {
+        const readOnly = section.pinned === true || section.generated === false;
+        return {
+          id: section.id,
+          heading: section.heading,
+          level: section.level,
+          line: findHeading(content, section),
+          read_only: readOnly,
+          body: readOnly ? sectionBodyDigest(content, section) : null,
+        };
+      });
     if (sections.length > 0) {
       pinnedPages.push({
         page_id: page.id,
@@ -1108,6 +1137,7 @@ const crypto = require('crypto');
 
 const snapshotPath = process.argv[2];
 const errors = [];
+const unlockPinnedSections = process.env.CLAUDUX_UNLOCK_PINNED_SECTIONS === '1';
 
 function fail(message) {
   errors.push(`docs guard: ${message}`);
@@ -1129,6 +1159,29 @@ function findHeading(content, section) {
   const match = pattern.exec(content);
   if (!match) return null;
   return content.slice(0, match.index).split(/\r?\n/).length;
+}
+
+function sectionBodyDigest(content, section) {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const headingPattern = new RegExp(
+    `^#{${section.level}}\\s+${escapeRegExp(section.heading)}(?:\\s+\\{#[^}]+\\})?\\s*$`
+  );
+  const start = lines.findIndex(line => headingPattern.test(line));
+  if (start === -1) return null;
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= section.level) {
+      end = index;
+      break;
+    }
+  }
+
+  const body = lines.slice(start + 1, end).join('\n').trim();
+  return {
+    sha256: sha256(body),
+  };
 }
 
 function protectedBlocks(content) {
@@ -1167,6 +1220,13 @@ for (const page of snapshot.pinned_pages || []) {
       fail(`${page.path}: pinned heading order changed near "${section.heading}"`);
     }
     previousLine = currentLine;
+
+    if (!unlockPinnedSections && section.read_only === true && section.body && section.body.sha256) {
+      const currentBody = sectionBodyDigest(content, section);
+      if (!currentBody || currentBody.sha256 !== section.body.sha256) {
+        fail(`${page.path}: pinned section body changed (${section.heading})`);
+      }
+    }
   }
 }
 
