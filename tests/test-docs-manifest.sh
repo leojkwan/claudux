@@ -40,7 +40,7 @@ setup_manifest_repo() {
             '  "deletion_policy": "manifest_pages_require_manifest_change",' \
             '  "generated_sections_default": "bounded_patch",' \
             '  "navigation": [' \
-            '    { "id": "technical", "title": "Technical", "link": "/technical/", "order": 1 },' \
+            '    { "id": "technical", "title": "Technical", "link": "/technical/deterministic-generation", "order": 1 },' \
             '    { "id": "api", "title": "API", "link": "/api/", "order": 2 }' \
             '  ],' \
             '  "pages": [' \
@@ -720,6 +720,30 @@ assert_contains "unknown generated section default fails validation" "$(cat /tmp
 assert_contains "unknown page deletion policy fails validation" "$(cat /tmp/claudux-manifest-t25)" "technical.deterministic-generation: deletion_policy must be one of: never_delete_without_manifest_change"
 rm -rf "$TEST_DIR"
 
+# --- Test 26: manifest navigation links must resolve to manifest pages ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync('docs-structure.json', 'utf8'));
+manifest.navigation[0].title = '   ';
+manifest.navigation[0].link = 'https://example.com/docs';
+manifest.navigation[1].link = '/missing/';
+fs.writeFileSync('docs-structure.json', `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+    source "$LIB_DIR/docs-manifest.sh"
+    if validate_docs_structure_manifest >/tmp/claudux-manifest-t26-output 2>&1; then
+        echo "expected navigation link validation to fail"
+    else
+        cat /tmp/claudux-manifest-t26-output
+    fi
+) > /tmp/claudux-manifest-t26 2>&1
+assert_contains "blank navigation title fails validation" "$(cat /tmp/claudux-manifest-t26)" "technical: missing string title"
+assert_contains "external navigation link fails validation" "$(cat /tmp/claudux-manifest-t26)" "technical: link must be a root-relative docs link"
+assert_contains "missing navigation target fails validation" "$(cat /tmp/claudux-manifest-t26)" 'api: link "/missing/" must resolve to a manifest page (docs/missing/index.md)'
+rm -rf "$TEST_DIR"
+
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
@@ -741,6 +765,7 @@ rm -f /tmp/claudux-manifest-t22-schema /tmp/claudux-manifest-t22-schema-output /
 rm -f /tmp/claudux-manifest-t23
 rm -f /tmp/claudux-manifest-t24 /tmp/claudux-manifest-t24-output
 rm -f /tmp/claudux-manifest-t25 /tmp/claudux-manifest-t25-output
+rm -f /tmp/claudux-manifest-t26 /tmp/claudux-manifest-t26-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
 rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 

@@ -111,6 +111,26 @@ function validateRequiredEnum(owner, field, allowed, label) {
   }
 }
 
+function docsPathFromNavigationLink(link) {
+  if (typeof link !== 'string') return null;
+  const value = link.trim();
+  if (!value || value === '#' || !value.startsWith('/') || value.startsWith('//')) return null;
+  if (/^(?:https?:|mailto:|tel:)/.test(value)) return null;
+
+  const clean = value.split('#')[0].split('?')[0];
+  if (!clean || clean.includes('..')) return null;
+
+  let target = `docs${clean}`;
+  if (target.endsWith('/')) {
+    target += 'index.md';
+  } else if (!target.endsWith('.md')) {
+    target += '.md';
+  }
+  target = target.replace(/\/+/g, '/');
+  if (!target.startsWith('docs/') || !target.endsWith('.md')) return null;
+  return target;
+}
+
 const rootDeletionPolicies = new Set(['manifest_pages_require_manifest_change']);
 const generatedSectionDefaults = new Set(['bounded_patch']);
 const pageDeletionPolicies = new Set(['never_delete_without_manifest_change']);
@@ -135,6 +155,7 @@ if (manifest) {
   const pageIds = new Set();
   const pagePaths = new Set();
   const pageOrders = new Set();
+  const navigationLinks = [];
   let sourceOwnedPages = 0;
   let pinnedSections = 0;
 
@@ -156,6 +177,19 @@ if (manifest) {
           fail(`${label}: duplicate navigation id`);
         } else {
           navIds.add(item.id);
+        }
+        if (typeof item.title !== 'string' || item.title.trim().length === 0) {
+          fail(`${label}: missing string title`);
+        }
+        if (typeof item.link !== 'string' || item.link.trim().length === 0) {
+          fail(`${label}: missing string link`);
+        } else {
+          const targetPath = docsPathFromNavigationLink(item.link);
+          if (!targetPath) {
+            fail(`${label}: link must be a root-relative docs link`);
+          } else {
+            navigationLinks.push({ label, link: item.link, targetPath });
+          }
         }
         if (!Number.isInteger(item.order)) {
           fail(`${label}: order must be an integer`);
@@ -274,6 +308,12 @@ if (manifest) {
       }
     } else if (mode === 'post-generation' && page.path) {
       fail(`${label}: manifest page is missing on disk (${page.path})`);
+    }
+  }
+
+  for (const item of navigationLinks) {
+    if (!pagePaths.has(item.targetPath)) {
+      fail(`${item.label}: link "${item.link}" must resolve to a manifest page (${item.targetPath})`);
     }
   }
 

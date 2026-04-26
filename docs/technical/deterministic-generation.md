@@ -98,6 +98,10 @@ The manifest owns structure with fields that are easy to review:
 {
   "version": 1,
   "deletion_policy": "manifest_pages_require_manifest_change",
+  "generated_sections_default": "bounded_patch",
+  "navigation": [
+    { "id": "technical", "title": "Technical", "link": "/technical/", "order": 3 }
+  ],
   "pages": [
     {
       "id": "technical.deterministic-generation",
@@ -123,6 +127,8 @@ The manifest owns structure with fields that are easy to review:
 The model may recommend a manifest change in its plan. Claudux must apply that as a normal file diff before treating the new structure as valid.
 
 Policy fields are enums, not free-form prose. The root `deletion_policy` must be `manifest_pages_require_manifest_change`, the root `generated_sections_default` must be `bounded_patch`, and each page `deletion_policy` must be `never_delete_without_manifest_change`.
+
+Navigation fields are manifest-owned too. Each navigation item needs a non-empty `title`, a root-relative `link`, and that link must resolve to a page path declared in the same manifest.
 
 ## Pinned Pages and Sections
 
@@ -170,6 +176,7 @@ That distinction matters on large codebases where one source file has known depe
 Manifest validation has two modes:
 
 - Preflight validates JSON shape, unique page IDs, relative `docs/*.md` paths, deterministic navigation/page order values, deletion policy, non-empty source ownership patterns, section IDs, and unambiguous section `level + heading` anchors.
+- Navigation links must be root-relative docs links and must resolve to manifest pages, so placeholder or external nav targets fail before a model can treat them as structure.
 - Manifest policy fields are strict enums. Unknown deletion policies or generated-section defaults fail before cleanup, recreate, or generation can treat them as operational authority.
 - Manifest `source_patterns` must be repo-root relative. Absolute paths and `..` traversal are rejected so incremental scope does not depend on where a worktree is checked out.
 - Section authority fields such as `pinned`, `generated`, and `required` must be JSON booleans, not strings. A typo like `"pinned": "true"` cannot silently disable pinned-section guards.
