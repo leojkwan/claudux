@@ -63,7 +63,8 @@ export default defineConfig({
           collapsed: true,
           items: [
             { text: 'Architecture', link: '/technical/' },
-            { text: 'Templates', link: '/technical/templates' }
+            { text: 'Templates', link: '/technical/templates' },
+            { text: 'Deterministic Generation', link: '/technical/deterministic-generation' }
           ]
         },
         {
@@ -106,7 +107,8 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'Architecture', link: '/technical/' },
-            { text: 'Templates', link: '/technical/templates' }
+            { text: 'Templates', link: '/technical/templates' },
+            { text: 'Deterministic Generation', link: '/technical/deterministic-generation' }
           ]
         }
       ]

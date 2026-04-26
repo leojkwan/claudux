@@ -179,7 +179,7 @@ build_generation_prompt() {
         template_config="$LIB_DIR/templates/generic/config.json"
     fi
     
-    # Documentation map
+    # Documentation map / deterministic structure manifest
     for mapfile in "docs-map.md" "docs-structure.json"; do
         if [[ -f "$mapfile" ]]; then
             docs_map="$mapfile"
@@ -214,7 +214,10 @@ build_generation_prompt() {
 - Read $style_guide for universal AI documentation principles"
     fi
     
-    if [[ -n "$docs_map" ]]; then
+    if [[ "$docs_map" == "docs-structure.json" ]]; then
+        prompt+="
+- Read $docs_map as the deterministic docs manifest: page IDs, paths, nav order, source ownership, required sections, pinned sections, and deletion_policy are binding inputs. Preserve them unless the manifest itself changes."
+    elif [[ -n "$docs_map" ]]; then
         prompt+="
 - Read $docs_map for loose documentation guidance and protected areas"
     fi
@@ -242,10 +245,10 @@ build_generation_prompt() {
 🧠 First, analyze the entire project and create a detailed plan:
 
 1. **Read Configuration & Templates**:
-   - Load all template configs, style guides, and docs-map files
+   - Load all template configs, style guides, docs-map files, and docs-structure.json when present
    - Read lib/vitepress/sidebar-example.md for sidebar configuration patterns
    - Understand the expected documentation structure from templates
-   - Note any protected areas or special requirements
+   - Note any protected areas, pinned sections, source-owned pages, and deletion policies
    - Analyze existing docs structure if present
 
 2. **Analyze Codebase Structure**:
@@ -340,6 +343,7 @@ Output your complete analysis and plan, then proceed to Phase 2.
 - Generate all planned documentation files
 - Use accurate, current code examples
 - Follow template structures exactly
+- If docs-structure.json exists, only create pages or sections that are allowed by the manifest or explicitly propose the manifest change in your plan
 - Reference CLAUDE.md for project-specific coding patterns and conventions when creating technical documentation
 - Ensure all internal links work
 
@@ -354,6 +358,7 @@ VitePress Routing Rules:
 - Add missing sections or details
 - Update code examples to current versions
 - Preserve valuable existing content
+- Preserve pinned sections and page structure from docs-structure.json; patch source-owned generated sections rather than rewriting whole files
 
 - Respect project-specific conventions from CLAUDE.md if present
 - Respect site preferences from claudux.md if present
@@ -362,6 +367,7 @@ VitePress Routing Rules:
 - Delete files referencing non-existent code
 - Remove docs for deleted features
 - Clean up superseded duplicate content
+- Never delete manifest-listed pages or pinned sections unless docs-structure.json deletion_policy allows it
 
 🎯 Quality Checks:
 - Every code example must be from actual current code
@@ -440,12 +446,28 @@ update() {
         info "🎯 Focused directive: ${user_message:0:120}"
     fi
     load_project_config
+
+    if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
+        validate_docs_structure_manifest || error_exit "docs-structure.json failed validation before generation"
+    fi
+
+    local static_index_context=""
+    if declare -F build_static_analysis_index >/dev/null 2>&1; then
+        build_static_analysis_index || error_exit "Static analysis index failed"
+        static_index_context=$(format_static_analysis_index_context)
+    fi
     
     # Debug project config
     info "   Project: $PROJECT_NAME (type: $PROJECT_TYPE)"
     
     local prompt
     prompt=$(build_generation_prompt "$PROJECT_TYPE" "$PROJECT_NAME" "$user_message")
+
+    if [[ -n "$static_index_context" ]]; then
+        prompt="${static_index_context}
+
+$prompt"
+    fi
 
     # Incremental mode: if a checkpoint exists and is valid, scope to changed files.
     # Corrupt state or missing file falls through to full scan silently.
@@ -459,11 +481,24 @@ update() {
             info "Incremental mode: $count file(s) changed since last run"
             local file_list
             file_list=$(echo "$changed_files" | tr '\n' ', ' | sed 's/,$//')
+            local impacted_docs=""
+            if declare -F resolve_impacted_docs_from_changed_files >/dev/null 2>&1; then
+                impacted_docs=$(CLAUDUX_CHANGED_FILES="$changed_files" resolve_impacted_docs_from_changed_files 2>/dev/null || true)
+            fi
+            local base_prompt="$prompt"
             prompt="INCREMENTAL UPDATE: Only the following $count files changed since the last documentation run. Focus your analysis and updates on these files and any docs that reference them. Do a full scan only if the changes affect project structure or config.
 
 Changed files: $file_list
+"
+            if [[ -n "$impacted_docs" ]]; then
+                prompt+="
+Manifest-owned impacted docs/sections:
+$impacted_docs
+"
+            fi
 
-$prompt"
+            prompt+="
+$base_prompt"
         elif [[ $diff_rc -eq 0 ]]; then
             info "No source changes since last run — running full scan"
         else
@@ -660,6 +695,10 @@ $prompt"
             fi
         fi
         
+        if declare -F validate_docs_structure_manifest >/dev/null 2>&1; then
+            validate_docs_structure_manifest --post-generation || error_exit "docs-structure.json validation failed after generation"
+        fi
+
         # Validate links in generated documentation
         info "🔍 Step 3: Validating documentation links..."
         if [[ -f "$LIB_DIR/validate-links.sh" ]]; then
