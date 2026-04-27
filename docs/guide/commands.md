@@ -166,7 +166,7 @@ Switch between AI backends using environment variables:
 # Default -- uses Claude
 claudux update
 
-# Use Codex (GPT-5.4) instead
+# Use Codex instead
 CLAUDUX_BACKEND=codex claudux update
 
 # Or export for the session

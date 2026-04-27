@@ -64,7 +64,9 @@ Patch application is bounded and transactional:
 
 The behavior is covered mechanically in `tests/test-docs-manifest.sh`, including repeated marker dedupe, echoed JSONL payload dedupe, conflicting payload rejection, truncated summary-marker rejection, incremental allowlist blocking, mixed-batch rollback, and same-or-higher-level heading rejection.
 
-Backend controls stay explicit in patch mode: Claude is limited to `Read`, and Codex keeps `approval_policy="never"` while defaulting to a read-only sandbox unless `CODEX_SANDBOX_MODE` overrides it.
+Patch mode constrains filesystem authority, not provider compatibility. On the Codex path, `run_codex_exec()` forwards `CODEX_MODEL` straight to `codex exec -m`, while `get_codex_model_settings()` only prettifies a few known labels such as `gpt-5.4` and `gpt-5.3-codex` for logs. Unknown model strings still run under a generic `Codex <model>` label, so a value such as `gpt-5.5` can appear in headers or progress output even when the installed Codex CLI cannot satisfy it.
+
+Backend controls stay explicit in patch mode: Claude is limited to `Read`, and Codex keeps `approval_policy` set to `never` while defaulting to a read-only sandbox unless `CODEX_SANDBOX_MODE` overrides it. Model-support failures surface later as backend errors, not as section-patch validation errors.
 
 ## Static Analysis Index
 
@@ -73,6 +75,7 @@ The static index is deterministic cache state written to `.claudux/index/static-
 `build_static_analysis_index()` rebuilds it from tracked files on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
 
 Each run records stable facts rather than prose:
+
 - `head_sha`.
 - Manifest path, digest, page count, and source-owned page count when a resolved manifest exists.
 - `package.json` scripts.
@@ -93,6 +96,14 @@ The current CLI token inventory is `--`, `--check`, `--help`, `--message`, `--st
 The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, sorted script and command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
 The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-snapshot.json`, and `impacted-docs.json` omit wall-clock timestamps, so identical repo state produces byte-stable deterministic artifacts.
+
+### Backend-selection facts
+
+The static index is authoritative for command existence and ownership, not for provider-side model availability. It can prove that `claudux check`, `claudux help`, `claudux update`, and the Codex-specific environment knobs are part of the shipped CLI surface, but it does not carry a support matrix for Codex model IDs.
+
+Runtime backend wording comes from `bin/claudux` and `lib/ui.sh`. `show_header` and `claudux check` echo `CLAUDUX_BACKEND`, `CODEX_MODEL`, and `CODEX_REASONING_EFFORT` verbatim, so if an operator exports `CODEX_MODEL=gpt-5.5`, the UI will report `gpt-5.5`.
+
+That echo is configuration state, not a compatibility guarantee. The shipped default and the documented recovery baseline remain `gpt-5.4`, so deterministic docs should treat `gpt-5.4` as the safe fallback and describe newer model strings as pass-through values that may require a newer Codex CLI.
 
 ## docs-structure.json Manifest
 
@@ -212,6 +223,17 @@ The success path does not run link validation twice. The failure path may re-run
 
 Deletion safeguards are validated by policy too. When `docs-structure.json` exists, the internal cleanup helper in `lib/cleanup.sh` refuses manifest-owned deletion unless `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1` is set, and `claudux recreate` refuses the same deletion unless `CLAUDUX_ALLOW_MANIFEST_RECREATE=1` is set.
 
+### Backend-aware failure handling
+
+The verification path distinguishes between configuration echo, backend preflight, and true generation failure:
+
+- `show_header` and `claudux check` report the active backend plus the current `CODEX_MODEL` and `CODEX_REASONING_EFFORT`, but they do not prove that the selected model is supported by the installed Codex CLI.
+- Commands that actually invoke a model go through `check_generation_backend()`. On the Codex path, that means `check_codex()` must find the CLI and verify auth before generation starts.
+- `check_codex()` prefers the zero-token `codex login status` probe. If the installed CLI is older and lacks that subcommand, claudux falls back to a minimal `codex exec` probe and warns that the legacy path wastes roughly 28K tokens.
+- If a Codex run fails after launch, `update()` labels the failure as `Codex CLI`, not Claude, and prints the concrete recovery sequence baked into the tool: run `codex login status`, retry with `CODEX_MODEL=gpt-5.4 CLAUDUX_BACKEND=codex claudux update`, upgrade with `npm install -g @openai/codex` if the requested model needs a newer CLI, inspect `CODEX_STDERR_LOG` or `/tmp/claudux-codex-stderr.log`, and then rule out connectivity issues.
+
+That split matters for dogfooding. A header that says `Powered by Codex (gpt-5.5, xhigh reasoning)` only means the environment requested that model. The supported fallback that claudux documents, tests, and suggests on failure is still `gpt-5.4`.
+
 ### Read-only sandbox dogfood note
 
 Dogfooding claudux against claudux in a read-only agent sandbox surfaced environment failures before logical validation:
@@ -259,6 +281,8 @@ The nested deterministic block includes:
 - `source_hashes` for tracked non-doc files.
 - `doc_section_hashes` for manifest sections currently found on disk.
 - `source_to_section_coverage` built from page and section `source_patterns`.
+
+The checkpoint intentionally records the backend but not the selected model or reasoning effort. A failed or retried Codex run might bounce from `CODEX_MODEL=gpt-5.5` back to `CODEX_MODEL=gpt-5.4`, yet the persisted freshness state still answers the narrower question of which backend produced the docs.
 
 `claudux diff` compares `last_sha..HEAD`, and `claudux status` uses the same checkpoint to report generation time, backend, documented-file count, and how many commits behind HEAD the docs are when the saved SHA still exists.
 
