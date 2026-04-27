@@ -66,15 +66,25 @@ Backend controls stay explicit in patch mode: Claude is limited to `Read`, and C
 
 ## Static Analysis Index
 
-The static index is deterministic cache state under `.claudux/index/static-analysis.json`, not hand-maintained documentation. `build_static_analysis_index()` rebuilds it from `git ls-files -z`: tracked `docs/**/*.md` files become the docs inventory, and tracked non-doc project files outside `.claudux/` and `node_modules/` become the source inventory.
+The static index is deterministic cache state written to `.claudux/index/static-analysis.json` by default. `CLAUDUX_INDEX_DIR` or `CLAUDUX_STATIC_INDEX_FILE` can relocate it; prompt construction always reads the resolved path.
+
+`build_static_analysis_index()` rebuilds it from `git ls-files -z` on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
 
 Each run records stable facts rather than prose:
 - `head_sha`.
-- Manifest path, digest, page count, and source-owned page count when `docs-structure.json` exists.
-- Hashes for tracked source files, plus hashes and heading inventories for tracked docs pages.
-- `package.json` scripts, CLI commands parsed from `bin/claudux`, exported shell functions, tracked test file hashes, dependency edges, internal docs links, protected skip blocks, and page/section source ownership.
-- For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
-- For claudux itself, the current CLI command inventory extracted from `bin/claudux` is `--check`, `--help`, `--version`, `-V`, `-h`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`.
+- Manifest path, digest, page count, and source-owned page count when a resolved manifest exists.
+- `package.json` scripts.
+- CLI commands parsed from `bin/claudux`.
+- Exported shell functions.
+- Tracked test file hashes.
+- Dependency edges from shell `source` and `.` statements, `REQUIRED_LIBS` in `bin/claudux`, the conditional `lib/codex-utils.sh` source, and repo-file references inside `package.json` scripts.
+- Source file hashes.
+- Docs file hashes plus heading inventories.
+- Internal markdown docs links.
+- Protected skip blocks with markers, line numbers, and hashes.
+- Manifest page and section source ownership.
+
+For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`. The current CLI command inventory extracted from `bin/claudux` is `--check`, `--help`, `--version`, `-V`, `-h`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`.
 
 The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
@@ -82,22 +92,24 @@ The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-sna
 
 ## docs-structure.json Manifest
 
-`docs-structure.json` is the operational contract for docs structure. `claudux.md` can influence taste, but the manifest owns patch addresses, navigation targets, required headings, source ownership, and deletion authority. When both `docs-structure.json` and `docs-map.md` exist, `build_generation_prompt()` treats the manifest as primary and keeps `docs-map.md` as supplemental legacy guidance only.
+`docs-structure.json` is the default checked-in manifest, but claudux resolves the active manifest path through `docs_structure_path()`. Advanced runs and tests can override that path with `CLAUDUX_DOCS_STRUCTURE` or `DOCS_STRUCTURE_FILE` without changing the repo default.
+
+The manifest is the operational contract for docs structure. `claudux.md` can influence taste, but the manifest owns patch addresses, navigation targets, required headings, source ownership, and deletion authority. When both `docs-structure.json` and `docs-map.md` exist, `build_generation_prompt()` treats the manifest as primary and keeps `docs-map.md` as supplemental legacy guidance only.
 
 Key semantics are enforced mechanically:
 - Root `deletion_policy` must be `manifest_pages_require_manifest_change`.
 - Root `generated_sections_default` must be `bounded_patch`.
 - Each page `deletion_policy` must be `never_delete_without_manifest_change`.
 - Each page path must be a repo-relative markdown path under `docs/`, and page IDs, page paths, and page `order` values must be unique.
-- Navigation links must be root-relative docs links that resolve to manifest pages; blank titles, placeholder links, and external URLs fail validation.
+- Navigation IDs and navigation `order` values must be unique. Navigation links must be non-empty root-relative docs links that resolve to manifest pages; blank titles, placeholder links, and external URLs fail validation.
 - Page `id`, section `id`, navigation `id`, and page `nav_group` values must match the stable manifest-key pattern `[a-z0-9][a-z0-9._-]*`.
 - Section IDs must be unique within a page, and a page cannot declare the same `level + heading` pair twice.
-- `source_patterns` must be repo-root relative; absolute paths, Windows drive prefixes, and `..` traversal are rejected before impact mapping.
+- `source_patterns` must be repo-root relative; absolute paths, Windows drive prefixes, empty strings, non-string entries, and `..` traversal are rejected before impact mapping.
 - Authority fields such as `pinned`, `generated`, and `required` must be real JSON booleans, not strings.
 - A section is required by default unless it explicitly sets `required: false`.
 - `generated: false` marks a section read-only even when it is not pinned.
 
-Those rules keep structure changes reviewable as manifest diffs instead of letting a model invent new patch keys, nav targets, deletion behavior, or ambiguous section addresses from prose.
+Those rules keep structure changes reviewable as manifest diffs instead of letting a model invent new patch keys, nav targets, order values, deletion behavior, or ambiguous section addresses from prose.
 
 ## Pinned Pages and Sections
 
