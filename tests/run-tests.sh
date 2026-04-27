@@ -256,7 +256,25 @@ else
     fail "check should report Node status"
 fi
 
-# ── 8. Project type detection ─────────────────────────────────────────
+# ── 8. Validate command ───────────────────────────────────────────────
+section "CLI: validate"
+
+validate_output=$("$REPO_ROOT/bin/claudux" validate 2>&1)
+validate_exit=$?
+
+if [[ $validate_exit -eq 0 ]]; then
+    pass "validate exits 0"
+else
+    fail "validate exits $validate_exit" "$validate_output"
+fi
+
+if echo "$validate_output" | grep -q "✅ ✅ All links are valid!"; then
+    fail "validate should not double-prefix success output" "$validate_output"
+else
+    pass "validate success output has a single prefix"
+fi
+
+# ── 9. Project type detection ─────────────────────────────────────────
 section "Project detection"
 
 # Source project.sh to get detect_project_type
@@ -339,7 +357,7 @@ else
     fail "detect_project_type: empty dir expected 'generic'" "$actual"
 fi
 
-# ── 9. Package.json consistency ───────────────────────────────────────
+# ── 10. Package.json consistency ──────────────────────────────────────
 section "Package.json"
 
 # Verify required fields exist
@@ -373,7 +391,7 @@ if [[ $dep_count -gt 0 ]]; then
     fi
 fi
 
-# ── 10. README accuracy ──────────────────────────────────────────────
+# ── 11. README accuracy ───────────────────────────────────────────────
 section "README accuracy"
 
 readme="$REPO_ROOT/README.md"
