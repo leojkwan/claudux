@@ -36,6 +36,8 @@ The deterministic pipeline is:
 
 When `docs-structure.json` exists, claudux removes direct `docs/**` write authority from the model. The model returns a single marker-delimited JSON payload, and claudux extracts, validates, and applies it locally.
 
+The extracted payload is staged at `.claudux/index/section-patches.json` by default, and `CLAUDUX_SECTION_PATCH_FILE` can relocate that file for harnesses or tests that need a different scratch path.
+
 ### Extractor behavior
 
 The extractor is strict about payload shape and tolerant about transport noise:
@@ -162,7 +164,7 @@ Dependency edges come from more than shell `source` statements:
 - `bin/claudux` contributes explicit edges for every file in `REQUIRED_LIBS`, plus the conditional `lib/codex-utils.sh` source.
 - `package.json` scripts contribute edges when they reference repo files under `bin/`, `lib/`, `tests/`, or `scripts/`.
 
-`resolve_impacted_docs_from_changed_files()` writes `.claudux/index/impacted-docs.json` with `changed_files`, `expanded_files`, `dependency_notes`, `pages`, and `sections`. Patch mode then uses that file as the incremental allowlist:
+`resolve_impacted_docs_from_changed_files()` writes `.claudux/index/impacted-docs.json` by default, or the path from `CLAUDUX_IMPACT_ALLOWLIST_FILE`, with `changed_files`, `expanded_files`, `dependency_notes`, `pages`, and `sections`. Patch mode then uses that file as the incremental allowlist:
 - A section with its own `source_patterns` must be directly impacted to be patchable in an incremental run.
 - A generated section without its own ownership can be patched when its page is impacted.
 - Full scans skip the allowlist and can touch any non-pinned generated section in the manifest.
@@ -172,6 +174,8 @@ That keeps unrelated docs stable on larger repos while still letting structure-a
 ## Validators
 
 Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, captures the guard snapshot before generation, and then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: post-generation manifest validation first, then `lib/validate-links.sh`.
+
+The guard snapshot lives at `.claudux/index/docs-guard-snapshot.json` by default, and `CLAUDUX_GUARD_SNAPSHOT_FILE` can relocate it for test harnesses or alternate scratch layouts.
 
 ### Manifest and guard validation
 
