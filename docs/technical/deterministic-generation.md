@@ -61,11 +61,11 @@ Each run records stable facts rather than prose:
 - `head_sha`.
 - Manifest path, digest, page count, and source-owned page count when `docs-structure.json` exists.
 - Hashes for tracked source files, plus hashes and heading inventories for tracked docs pages.
-- `package.json` scripts, CLI commands parsed from `bin/claudux`, exported shell functions, test file hashes, dependency edges, internal docs links, protected skip blocks, and page/section source ownership.
+- `package.json` scripts, CLI commands parsed from `bin/claudux`, exported shell functions, tracked test file hashes, dependency edges, internal docs links, protected skip blocks, and page/section source ownership.
 - For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
-- For claudux itself, current CLI command extraction includes canonical commands plus aliases and flags such as `serve`, `server`, `dev`, `check`, `--check`, `help`, `-h`, `--help`, `version`, `-V`, and `--version`.
+- For claudux itself, the current CLI command inventory extracted from `bin/claudux` is `--check`, `--help`, `--version`, `-V`, `-h`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`.
 
-The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, command lists, and source-owned page mappings before any model output is accepted.
+The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
 The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-snapshot.json`, and `impacted-docs.json` omit wall-clock timestamps, so identical repo state produces byte-stable deterministic artifacts.
 
@@ -77,30 +77,31 @@ Key semantics are enforced mechanically:
 - Root `deletion_policy` must be `manifest_pages_require_manifest_change`.
 - Root `generated_sections_default` must be `bounded_patch`.
 - Each page `deletion_policy` must be `never_delete_without_manifest_change`.
+- Each page path must be a repo-relative markdown path under `docs/`, and page IDs, page paths, and page `order` values must be unique.
 - Navigation links must be root-relative docs links that resolve to manifest pages; blank titles, placeholder links, and external URLs fail validation.
-- `page_id`, `section_id`, navigation `id`, and page `nav_group` values must match the stable manifest-key pattern `[a-z0-9][a-z0-9._-]*`.
+- Page `id`, section `id`, navigation `id`, and page `nav_group` values must match the stable manifest-key pattern `[a-z0-9][a-z0-9._-]*`.
+- Section IDs must be unique within a page, and a page cannot declare the same `level + heading` pair twice.
 - `source_patterns` must be repo-root relative; absolute paths, Windows drive prefixes, and `..` traversal are rejected before impact mapping.
 - Authority fields such as `pinned`, `generated`, and `required` must be real JSON booleans, not strings.
 - A section is required by default unless it explicitly sets `required: false`.
 - `generated: false` marks a section read-only even when it is not pinned.
 
-Those rules keep structure changes reviewable as manifest diffs instead of letting a model invent new patch keys, nav targets, or deletion behavior from prose.
+Those rules keep structure changes reviewable as manifest diffs instead of letting a model invent new patch keys, nav targets, deletion behavior, or ambiguous section addresses from prose.
 
 ## Pinned Pages and Sections
 
 Pinned is the write barrier. Required is the existence barrier.
 
 During patch application:
-
 - Ordinary generated sections can be rewritten when they are inside the current impact allowlist.
 - Sections with `pinned: true` are read-only by default.
 - Sections with `generated: false` are read-only by the same guard, even if they are not pinned.
 
-During guard validation, claudux tracks a slightly wider set:
-
+During guard validation, claudux tracks every pinned section plus every section that is still required:
 - Pinned and required headings must still exist on disk after generation.
-- Pinned headings must stay in manifest order within the page.
+- That captured sequence must stay in manifest order within the page.
 - Only read-only section bodies are hash-locked; editable generated sections can change as long as they stay within their declared boundary.
+- `required: false` opts a non-pinned section out of the existence and order guard, but it does not make a `generated: false` section writable.
 - Manifest-owned pages themselves must remain present on disk.
 
 An intentional pinned rewrite needs two signals in the same run: `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` in the environment and `unlock_pinned: true` on the individual patch. That keeps a model-only run from silently editing doctrine.
@@ -149,18 +150,21 @@ That keeps unrelated docs stable on larger repos while still letting structure-a
 Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: manifest first, links second.
 
 Manifest validation covers contract correctness:
-- JSON shape, unique page IDs, unique deterministic order values, and `docs/*.md` page paths.
+- JSON shape, unique page IDs, unique page paths, unique deterministic order values, and `docs/*.md` page paths.
 - Stable manifest keys for navigation IDs, page IDs, section IDs, and `nav_group`.
 - Strict enums for deletion-policy and generated-section defaults.
+- Non-empty navigation titles, root-relative docs links, and navigation targets that resolve to manifest pages.
 - Repo-root-relative `source_patterns` and real boolean values for `pinned`, `generated`, and `required`.
-- Unambiguous `level + heading` section anchors, plus post-generation checks that required and pinned headings still exist on disk.
+- Unique section IDs plus unambiguous `level + heading` anchors within each page.
+- Post-generation checks that manifest pages exist on disk, required headings still exist, and declared heading anchors are not duplicated on disk.
+- Post-generation runs also require at least one pinned section so the guard snapshot has doctrine to preserve.
 
 Link validation adds two docs-site checks:
 - `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
 - It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
 
 The guard snapshot enforces preservation rules that schema validation cannot prove:
-- Pinned headings must stay in manifest order.
+- Captured pinned and required headings must stay in manifest order.
 - Pinned or otherwise read-only section bodies must keep the same hash unless pinned unlock is explicitly enabled.
 - Existing skip-marker blocks must keep the same count and content hash across docs and source files.
 
