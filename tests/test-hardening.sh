@@ -282,6 +282,26 @@ assert_contains "update --help exits 2" "$result16" "exit:2"
 assert_not_contains "update --help skips model auth probe" "$result16" "Checking available models"
 assert_not_contains "update --help skips auth API call" "$result16" "API Error"
 
+(
+    cd "$REPO_ROOT"
+    bash "$REPO_ROOT/bin/claudux" update -m 2>&1
+    echo "exit:$?"
+) > /tmp/claudux-harden-t16-missing 2>&1
+result16_missing=$(cat /tmp/claudux-harden-t16-missing)
+assert_contains "update -m requires message" "$result16_missing" "Option -m requires an argument"
+assert_contains "update -m exits 2" "$result16_missing" "exit:2"
+assert_not_contains "update -m skips auth API call" "$result16_missing" "API Error"
+
+(
+    cd "$REPO_ROOT"
+    bash "$REPO_ROOT/bin/claudux" update --message --strict 2>&1
+    echo "exit:$?"
+) > /tmp/claudux-harden-t16-option-value 2>&1
+result16_option_value=$(cat /tmp/claudux-harden-t16-option-value)
+assert_contains "update --message rejects option as value" "$result16_option_value" "Option --message requires a non-option argument"
+assert_contains "update --message option exits 2" "$result16_option_value" "exit:2"
+assert_not_contains "update --message option skips auth API call" "$result16_option_value" "API Error"
+
 # --- Test 17: docs-generation.sh has no unguarded variable references ---
 # set -u will catch unset vars; verify the file can be sourced in a strict shell
 TEST_DIR=$(setup_repo)
