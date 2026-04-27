@@ -36,20 +36,31 @@ The deterministic pipeline is:
 
 When `docs-structure.json` exists, claudux removes direct `docs/**` write authority from the model. The model returns a single marker-delimited JSON payload, and claudux extracts, validates, and applies it locally.
 
-The extractor is intentionally strict:
+### Extractor behavior
+
+The extractor is strict about payload shape and tolerant about transport noise:
+
 - It scans raw output plus nested JSONL string fields named `text`, `content`, `result`, and `message`.
-- Identical repeated payloads are deduplicated, which covers echoed Claude or Codex output.
+- Raw non-JSON lines are still searched, which lets plain final responses and JSONL event streams use the same contract.
+- Identical repeated payloads are deduplicated, covering repeated marker pairs and echoed `agent_message` or `result` payloads.
 - Conflicting repeated payloads, orphaned markers, end-before-start ordering, and invalid JSON fail the run.
 - Fenced JSON is accepted, and a bare array is normalized to an object with a `patches` array.
 - Turn-summary fields such as `summary` are ignored, so truncated recap text cannot satisfy the contract.
 
+### Patch application rules
+
 Patch application is bounded and transactional:
+
 - Every patch must resolve to one manifest `page_id` plus `section_id`, and a batch cannot target the same section twice.
+- `body_markdown` is the contract field. `markdown` and `content` are accepted as compatibility aliases when reading a patch body.
+- If the model repeats the section heading inside the body, `normalizeBody()` strips that heading before writing.
 - `body_markdown` can contain deeper subheadings and code fences, but same-level or higher headings outside fences are rejected.
-- Missing on-disk headings fail unless `create_if_missing: true` is set on that patch.
+- Missing on-disk headings fail unless `create_if_missing: true` is set. In that case claudux appends the declared manifest heading and then inserts the body under it.
 - Pinned sections and sections with `generated: false` stay read-only unless both `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` and `unlock_pinned: true` are present.
 - Incremental runs enforce `.claudux/index/impacted-docs.json`; full scans can touch any non-pinned generated section in the manifest.
-- Validation is all-or-nothing. One invalid or out-of-scope patch leaves every file unchanged.
+- Validation is all-or-nothing. One invalid, duplicate, pinned, out-of-scope, or boundary-escaping patch leaves every file unchanged.
+
+The behavior is covered mechanically in `tests/test-docs-manifest.sh`, including repeated marker dedupe, echoed JSONL payload dedupe, conflicting payload rejection, truncated summary-marker rejection, incremental allowlist blocking, mixed-batch rollback, and same-or-higher-level heading rejection.
 
 Backend controls stay explicit in patch mode: Claude is limited to `Read`, and Codex keeps `approval_policy="never"` while defaulting to a read-only sandbox unless `CODEX_SANDBOX_MODE` overrides it.
 
@@ -147,9 +158,12 @@ That keeps unrelated docs stable on larger repos while still letting structure-a
 
 ## Validators
 
-Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: manifest first, links second. The success path does not run link validation twice, and the final banner keeps the check mark owned by the shared `success()` wrapper.
+Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, captures the guard snapshot before generation, and then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: post-generation manifest validation first, then `lib/validate-links.sh`.
+
+### Manifest and guard validation
 
 Manifest validation covers contract correctness:
+
 - JSON shape, unique page IDs, unique page paths, unique deterministic order values, and `docs/*.md` page paths.
 - Stable manifest keys for navigation IDs, page IDs, section IDs, and `nav_group`.
 - Strict enums for deletion-policy and generated-section defaults.
@@ -159,17 +173,34 @@ Manifest validation covers contract correctness:
 - Post-generation checks that manifest pages exist on disk, required headings still exist, and declared heading anchors are not duplicated on disk.
 - Post-generation runs also require at least one pinned section so the guard snapshot has doctrine to preserve.
 
-Link validation adds two docs-site checks:
-- `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
-- It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
-- On the all-green path, `lib/validate-links.sh` prints `✅ All internal links validated successfully!`, then `lib/ui.sh` calls `success "All links are valid!"`. Because `success()` prefixes its own `✅`, the wrapper banner renders with a single check mark.
-
 The guard snapshot enforces preservation rules that schema validation cannot prove:
+
 - Captured pinned and required headings must stay in manifest order.
 - Pinned or otherwise read-only section bodies must keep the same hash unless pinned unlock is explicitly enabled.
 - Existing skip-marker blocks must keep the same count and content hash across docs and source files.
 
+### Link validation and success markers
+
+Link validation adds the docs-site checks on top of the manifest contract:
+
+- `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
+- It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
+- On the green path, `lib/validate-links.sh` prints `All internal links validated successfully!`, then `lib/ui.sh` calls `success "All links are valid!"` to add the shared single success prefix.
+- `tests/run-tests.sh` includes the regression guard for the success-marker fix: `claudux validate` must not emit a doubled success prefix.
+
+The success path does not run link validation twice. The failure path may re-run `lib/validate-links.sh --output <tmp>` to collect a machine-readable missing-file list for `--auto-fix` or the auto-fix pass inside `update()`.
+
 Deletion safeguards are validated by policy too. When `docs-structure.json` exists, the internal cleanup helper in `lib/cleanup.sh` refuses manifest-owned deletion unless `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1` is set, and `claudux recreate` refuses the same deletion unless `CLAUDUX_ALLOW_MANIFEST_RECREATE=1` is set.
+
+### Read-only sandbox dogfood note
+
+Dogfooding claudux against claudux in a read-only agent sandbox surfaced environment failures before logical validation:
+
+- `./bin/claudux validate` aborted in `lib/docs-manifest.sh` with `line 38: cannot create temp file for here document: Operation not permitted`.
+- `bash tests/test-docs-manifest.sh` failed during scratch-repo and temp-file setup with errors such as `mktemp: mkdtemp failed ... Operation not permitted` and `fatal: Unable to create .../index.lock: Operation not permitted`.
+- `bash tests/test-content-protection.sh` and `bash tests/test-backend-router.sh` likewise failed when writing under `/tmp` or `$TMPDIR`.
+
+Those failures were sandbox write failures, not manifest, patch-mode, or link-resolution regressions in the checked-in code. The validator and tests assume writable temp storage, writable scratch repos, and normal git lockfile creation.
 
 ## StrongYes Harness Example
 
