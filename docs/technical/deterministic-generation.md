@@ -70,13 +70,13 @@ Backend controls stay explicit in patch mode: Claude is limited to `Read`, and C
 
 The static index is deterministic cache state written to `.claudux/index/static-analysis.json` by default. `CLAUDUX_INDEX_DIR` or `CLAUDUX_STATIC_INDEX_FILE` can relocate it; prompt construction always reads the resolved path.
 
-`build_static_analysis_index()` rebuilds it from `git ls-files -z` on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
+`build_static_analysis_index()` rebuilds it from tracked files on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
 
 Each run records stable facts rather than prose:
 - `head_sha`.
 - Manifest path, digest, page count, and source-owned page count when a resolved manifest exists.
 - `package.json` scripts.
-- CLI commands parsed from `bin/claudux`.
+- CLI command tokens parsed from Bash `case` labels in `bin/claudux`.
 - Exported shell functions.
 - Tracked test file hashes.
 - Dependency edges from shell `source` and `.` statements, `REQUIRED_LIBS` in `bin/claudux`, the conditional `lib/codex-utils.sh` source, and repo-file references inside `package.json` scripts.
@@ -86,9 +86,11 @@ Each run records stable facts rather than prose:
 - Protected skip blocks with markers, line numbers, and hashes.
 - Manifest page and section source ownership.
 
-For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`. The current CLI command inventory extracted from `bin/claudux` is `--check`, `--help`, `--version`, `-V`, `-h`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`.
+For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
-The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
+The current CLI token inventory is `--`, `--check`, `--help`, `--message`, `--strict`, `--version`, `--with`, `-V`, `-h`, `-m`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`. That list is intentionally broader than the public subcommand menu: `cliCommandsFromBin()` scans mechanical `case` arms across `bin/claudux`, so option-parser labels from `validate_update_args()` are indexed alongside top-level dispatch labels.
+
+The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, sorted script and command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
 The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-snapshot.json`, and `impacted-docs.json` omit wall-clock timestamps, so identical repo state produces byte-stable deterministic artifacts.
 
