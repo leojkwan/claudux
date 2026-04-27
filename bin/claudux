@@ -228,10 +228,12 @@ validate_update_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -m|--message|--with)
-                if [[ $# -gt 1 ]]; then
+                if [[ $# -gt 1 && "$2" != -* ]]; then
                     shift 2
+                elif [[ $# -gt 1 ]]; then
+                    error_exit "Option $1 requires a non-option argument. Usage: claudux update [--with|-m \"message\"] [--strict]" 2
                 else
-                    shift
+                    error_exit "Option $1 requires an argument. Usage: claudux update [--with|-m \"message\"] [--strict]" 2
                 fi
                 ;;
             --strict)
