@@ -224,8 +224,38 @@ check_generation_backend() {
     fi
 }
 
+validate_update_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -m|--message|--with)
+                if [[ $# -gt 1 ]]; then
+                    shift 2
+                else
+                    shift
+                fi
+                ;;
+            --strict)
+                shift
+                ;;
+            --)
+                break
+                ;;
+            -*)
+                error_exit "Unknown option for 'update': $1. Usage: claudux update [--with|-m \"message\"] [--strict]" 2
+                ;;
+            *)
+                error_exit "Unexpected argument: $1" 2
+                ;;
+        esac
+    done
+}
+
 # Main function
 main() {
+    if [[ "${1:-}" == "update" ]]; then
+        validate_update_args "${@:2}"
+    fi
+
     # Only validate dependencies for commands that need the LLM backend.
     # Unknown commands skip validation and fall through to the error handler.
     case "${1:-}" in

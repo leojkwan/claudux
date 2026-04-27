@@ -270,7 +270,19 @@ assert_contains "unknown command exits non-zero" "$(cat /tmp/claudux-harden-t14)
 validate_fn=$(sed -n '/^validate_dependencies()/,/^}/p' "$REPO_ROOT/bin/claudux")
 assert_contains "validate checks CODEX_UTILS_MISSING" "$validate_fn" 'CODEX_UTILS_MISSING'
 
-# --- Test 16: docs-generation.sh has no unguarded variable references ---
+# --- Test 16: update rejects bad options before backend auth ---
+(
+    cd "$REPO_ROOT"
+    bash "$REPO_ROOT/bin/claudux" update --help 2>&1
+    echo "exit:$?"
+) > /tmp/claudux-harden-t16 2>&1
+result16=$(cat /tmp/claudux-harden-t16)
+assert_contains "update --help reports update option error" "$result16" "Unknown option for 'update': --help"
+assert_contains "update --help exits 2" "$result16" "exit:2"
+assert_not_contains "update --help skips model auth probe" "$result16" "Checking available models"
+assert_not_contains "update --help skips auth API call" "$result16" "API Error"
+
+# --- Test 17: docs-generation.sh has no unguarded variable references ---
 # set -u will catch unset vars; verify the file can be sourced in a strict shell
 TEST_DIR=$(setup_repo)
 (
@@ -281,11 +293,11 @@ TEST_DIR=$(setup_repo)
     LIB_DIR="$REPO_ROOT/lib"
     source "$LIB_DIR/docs-generation.sh" 2>&1
     echo "sourced-ok"
-) > /tmp/claudux-harden-t16 2>&1
-assert_eq "docs-generation.sh sources under set -u" "sourced-ok" "$(tail -1 /tmp/claudux-harden-t16)"
+) > /tmp/claudux-harden-t17 2>&1
+assert_eq "docs-generation.sh sources under set -u" "sourced-ok" "$(tail -1 /tmp/claudux-harden-t17)"
 rm -rf "$TEST_DIR"
 
-# --- Test 17: State file with special characters in file paths ---
+# --- Test 18: State file with special characters in file paths ---
 TEST_DIR=$(setup_repo)
 (
     cd "$TEST_DIR"
@@ -310,8 +322,8 @@ TEST_DIR=$(setup_repo)
             echo "missing-path"
         fi
     fi
-) > /tmp/claudux-harden-t17 2>&1
-assert_eq "file paths with spaces produce valid JSON" "valid-json" "$(cat /tmp/claudux-harden-t17)"
+) > /tmp/claudux-harden-t18 2>&1
+assert_eq "file paths with spaces produce valid JSON" "valid-json" "$(cat /tmp/claudux-harden-t18)"
 rm -rf "$TEST_DIR"
 
 # ═══════════════════════════════════════════
