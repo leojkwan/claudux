@@ -302,6 +302,10 @@ assert_contains "update --message rejects option as value" "$result16_option_val
 assert_contains "update --message option exits 2" "$result16_option_value" "exit:2"
 assert_not_contains "update --message option skips auth API call" "$result16_option_value" "API Error"
 
+update_fn=$(sed -n '/^update()/,/^}$/p' "$REPO_ROOT/lib/docs-generation.sh")
+assert_contains "update parser rejects missing message" "$update_fn" "Option \$1 requires an argument"
+assert_contains "update parser rejects option as message" "$update_fn" "Option \$1 requires a non-option argument"
+
 # --- Test 17: docs-generation.sh has no unguarded variable references ---
 # set -u will catch unset vars; verify the file can be sourced in a strict shell
 TEST_DIR=$(setup_repo)

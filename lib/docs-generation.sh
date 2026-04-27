@@ -550,9 +550,15 @@ update() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -m|--message|--with)
-                shift
-                user_message="${1:-}"
-                shift || true
+                if [[ $# -gt 1 && "$2" != -* ]]; then
+                    shift
+                    user_message="$1"
+                    shift
+                elif [[ $# -gt 1 ]]; then
+                    error_exit "Option $1 requires a non-option argument" 2
+                else
+                    error_exit "Option $1 requires an argument" 2
+                fi
                 ;;
             --strict)
                 strict_mode=true
