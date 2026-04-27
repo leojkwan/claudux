@@ -131,7 +131,7 @@ Protected-block preservation is not limited to markdown docs. Any tracked file w
 
 ## Dependency-Aware Scope
 
-Incremental mode starts from the changed-file set derived from `.claudux-state.json`, then resolves that set through manifest ownership and reverse dependency edges from the static index. The expansion is intentionally upstream: if `lib/ui.sh` changes, `bin/claudux` is pulled into scope because the router sources that library; page ownership can then mark `api.index` as stale even though `bin/claudux` was not edited directly.
+Incremental mode starts from the changed-file set derived from `.claudux-state.json`, then resolves that set through manifest ownership and reverse dependency edges from the static index. The expansion is intentionally upstream: if `lib/ui.sh` changes, `bin/claudux` is pulled into scope because the router sources that library. That matters for pages like `home.index`, which own `bin/claudux` but do not own `lib/ui.sh` directly. Pages such as `api.index` may also move into scope on the same change, but there the direct `lib/*.sh` page ownership already matches before the reverse edge is even considered.
 
 Dependency edges come from more than shell `source` statements:
 - Shell-like files contribute `source` and `.` relationships.
@@ -143,7 +143,7 @@ Dependency edges come from more than shell `source` statements:
 - A generated section without its own ownership can be patched when its page is impacted.
 - Full scans skip the allowlist and can touch any non-pinned generated section in the manifest.
 
-That keeps unrelated docs stable on larger repos while still letting structure-adjacent changes widen scope when the code graph says they should.
+That keeps unrelated docs stable on larger repos while still letting structure-adjacent changes widen scope when the code graph, not just the changed-file list, says they should.
 
 ## Validators
 
