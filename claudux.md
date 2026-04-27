@@ -63,24 +63,31 @@ source "$LIB_DIR/ui.sh"
 The main script uses a **case-based command dispatcher** for routing CLI commands:
 
 ```bash
-# bin/claudux:47-101
+# bin/claudux:220-336
 main() {
     case "${1:-}" in
         "update")
             show_header
-            check_claude
+            check_generation_backend
             shift
             update "$@"
             ;;
-        "clean"|"cleanup")
+        "recreate")
             show_header
-            cleanup_docs
+            check_generation_backend
+            shift
+            recreate_docs "$@"
+            ;;
+        "validate")
+            show_header
+            shift
+            validate_links "$@"
             ;;
         # ... more commands
         "")
             # Default action: show interactive menu
             show_header
-            check_claude
+            check_generation_backend
             show_menu
             ;;
         *)
@@ -97,7 +104,7 @@ main() {
 
 **Why this pattern?**
 - Simple and readable command routing
-- Supports command aliases (e.g., "clean" and "cleanup")
+- Keeps backend checks scoped to commands that need generation
 - Provides default behavior for no arguments
 - Clear error handling for unknown commands
 
