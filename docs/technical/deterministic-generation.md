@@ -34,24 +34,20 @@ The deterministic pipeline is:
 
 ## Section Patch Application
 
-When `docs-structure.json` exists, claudux removes direct `docs/**` write authority from the model. The model returns a single marker-delimited JSON payload, and claudux extracts, validates, and applies it locally.
+When `docs-structure.json` exists, claudux removes direct `docs/**` write authority from the model. The model returns one marker-delimited JSON payload, and claudux extracts, validates, and applies it locally.
 
-The extracted payload is staged at `.claudux/index/section-patches.json` by default, and `CLAUDUX_SECTION_PATCH_FILE` can relocate that file for harnesses or tests that need a different scratch path.
+The extracted payload is staged at `.claudux/index/section-patches.json` by default, and `CLAUDUX_SECTION_PATCH_FILE` can relocate that file for tests or harnesses.
 
 ### Extractor behavior
 
-The extractor is strict about payload shape and tolerant about transport noise:
-
 - It scans raw output plus nested JSONL string fields named `text`, `content`, `result`, and `message`.
-- Raw non-JSON lines are still searched, which lets plain final responses and JSONL event streams use the same contract.
+- Raw non-JSON lines are still searched, so plain final responses and JSONL event streams use the same contract.
 - Identical repeated payloads are deduplicated, covering repeated marker pairs and echoed `agent_message` or `result` payloads.
 - Conflicting repeated payloads, orphaned markers, end-before-start ordering, and invalid JSON fail the run.
 - Fenced JSON is accepted, and a bare array is normalized to an object with a `patches` array.
 - Turn-summary fields such as `summary` are ignored, so truncated recap text cannot satisfy the contract.
 
 ### Patch application rules
-
-Patch application is bounded and transactional:
 
 - Every patch must resolve to one manifest `page_id` plus `section_id`, and a batch cannot target the same section twice.
 - `body_markdown` is the contract field. `markdown` and `content` are accepted as compatibility aliases when reading a patch body.
@@ -62,11 +58,13 @@ Patch application is bounded and transactional:
 - Incremental runs enforce `.claudux/index/impacted-docs.json`; full scans can touch any non-pinned generated section in the manifest.
 - Validation is all-or-nothing. One invalid, duplicate, pinned, out-of-scope, or boundary-escaping patch leaves every file unchanged.
 
+Write authority and source ownership are separate concerns. Section-level `source_patterns` influence impact scoping, but they do not make a section read-only. The read-only barrier comes from `pinned: true` or `generated: false`.
+
 The behavior is covered mechanically in `tests/test-docs-manifest.sh`, including repeated marker dedupe, echoed JSONL payload dedupe, conflicting payload rejection, truncated summary-marker rejection, incremental allowlist blocking, mixed-batch rollback, and same-or-higher-level heading rejection.
 
-Patch mode constrains filesystem authority, not provider compatibility. On the Codex path, `run_codex_exec()` forwards `CODEX_MODEL` straight to `codex exec -m`, while `get_codex_model_settings()` only prettifies a few known labels such as `gpt-5.4` and `gpt-5.3-codex` for logs. Unknown model strings still run under a generic `Codex <model>` label, so a value such as `gpt-5.5` can appear in headers or progress output even when the installed Codex CLI cannot satisfy it.
+Patch mode constrains filesystem authority, not provider compatibility. On the Codex path, `run_codex_exec()` always forwards `CODEX_MODEL` to `codex exec -m`, while `get_codex_model_settings()` only prettifies a few known labels such as `gpt-5.4` and `gpt-5.3-codex` for logs. Unknown model strings still run under a generic `Codex <model>` label, so a value such as `gpt-5.5` can appear in headers or progress output even when the installed Codex CLI cannot satisfy it.
 
-Backend controls stay explicit in patch mode: Claude is limited to `Read`, and Codex keeps `approval_policy` set to `never` while defaulting to a read-only sandbox unless `CODEX_SANDBOX_MODE` overrides it. Model-support failures surface later as backend errors, not as section-patch validation errors.
+Backend controls stay explicit in patch mode: Claude is limited to `Read`, and Codex keeps `approval_policy` set to `never` while defaulting to a read-only sandbox unless `CODEX_SANDBOX_MODE` overrides it. Unsupported model IDs never surface as section-patch validation errors. On modern Codex CLI builds they usually fail when the real `codex exec` run starts; on older builds without `codex login status`, the fallback auth probe in `check_codex()` can surface the same rejection earlier because it also runs `codex exec -m $CODEX_MODEL`.
 
 ## Static Analysis Index
 
@@ -91,7 +89,7 @@ Each run records stable facts rather than prose:
 
 For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
-The current CLI token inventory is `--`, `--check`, `--help`, `--message`, `--strict`, `--version`, `--with`, `-V`, `-h`, `-m`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`. That list is intentionally broader than the public subcommand menu: `cliCommandsFromBin()` scans mechanical `case` arms across `bin/claudux`, so option-parser labels from `validate_update_args()` are indexed alongside top-level dispatch labels.
+The current CLI token inventory is `--`, `--check`, `--help`, `--message`, `--strict`, `--version`, `--with`, `-V`, `-h`, `-m`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`. That list is intentionally broader than the public subcommand menu because `cliCommandsFromBin()` scans raw `case` labels and option-parser tokens, not just the canonical commands a human doc page would foreground.
 
 The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, sorted script and command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
@@ -134,6 +132,7 @@ During patch application:
 - Ordinary generated sections can be rewritten when they are inside the current impact allowlist.
 - Sections with `pinned: true` are read-only by default.
 - Sections with `generated: false` are read-only by the same guard, even if they are not pinned.
+- Section-level `source_patterns` affect incremental ownership and allowlist scope, but they do not make a section read-only. A generated section can be source-owned and still remain patchable.
 
 During guard validation, claudux tracks every pinned section plus every section that is still required:
 - Pinned and required headings must still exist on disk after generation.
@@ -229,7 +228,7 @@ The verification path distinguishes between configuration echo, backend prefligh
 
 - `show_header` and `claudux check` report the active backend plus the current `CODEX_MODEL` and `CODEX_REASONING_EFFORT`, but they do not prove that the selected model is supported by the installed Codex CLI.
 - Commands that actually invoke a model go through `check_generation_backend()`. On the Codex path, that means `check_codex()` must find the CLI and verify auth before generation starts.
-- `check_codex()` prefers the zero-token `codex login status` probe. If the installed CLI is older and lacks that subcommand, claudux falls back to a minimal `codex exec` probe and warns that the legacy path wastes roughly 28K tokens.
+- `check_codex()` prefers the zero-token `codex login status` probe. If the installed CLI is older and lacks that subcommand, claudux falls back to a minimal `codex exec` probe, warns that the legacy path wastes roughly 28K tokens, and reuses the active `CODEX_MODEL`. That means a too-new model ID can be rejected during backend preflight on legacy CLI instead of later during the main run.
 - If a Codex run fails after launch, `update()` labels the failure as `Codex CLI`, not Claude, and prints the concrete recovery sequence baked into the tool: run `codex login status`, retry with `CODEX_MODEL=gpt-5.4 CLAUDUX_BACKEND=codex claudux update`, upgrade with `npm install -g @openai/codex` if the requested model needs a newer CLI, inspect `CODEX_STDERR_LOG` or `/tmp/claudux-codex-stderr.log`, and then rule out connectivity issues.
 
 That split matters for dogfooding. A header that says `Powered by Codex (gpt-5.5, xhigh reasoning)` only means the environment requested that model. The supported fallback that claudux documents, tests, and suggests on failure is still `gpt-5.4`.
