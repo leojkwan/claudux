@@ -164,7 +164,7 @@ validate_links() {
     
     echo ""
     if [[ $exit_code -eq 0 ]]; then
-        success "✅ All links are valid!"
+        success "All links are valid!"
     else
         warn "⚠️  Some links are broken."
         if $auto_fix && [[ -s "$missing_tmp" ]]; then

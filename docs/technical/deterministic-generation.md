@@ -147,7 +147,7 @@ That keeps unrelated docs stable on larger repos while still letting structure-a
 
 ## Validators
 
-Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: manifest first, links second.
+Validation is layered rather than one big pass. `claudux update` validates the manifest before model invocation, then re-runs post-generation manifest checks, guard checks, and link validation after patches land. `claudux validate` follows the public verification path through `lib/ui.sh`: manifest first, links second. The success path does not run link validation twice, and the final banner keeps the check mark owned by the shared `success()` wrapper.
 
 Manifest validation covers contract correctness:
 - JSON shape, unique page IDs, unique page paths, unique deterministic order values, and `docs/*.md` page paths.
@@ -162,6 +162,7 @@ Manifest validation covers contract correctness:
 Link validation adds two docs-site checks:
 - `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
 - It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
+- On the all-green path, `lib/validate-links.sh` prints `✅ All internal links validated successfully!`, then `lib/ui.sh` calls `success "All links are valid!"`. Because `success()` prefixes its own `✅`, the wrapper banner renders with a single check mark.
 
 The guard snapshot enforces preservation rules that schema validation cannot prove:
 - Captured pinned and required headings must stay in manifest order.
