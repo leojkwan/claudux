@@ -7,7 +7,9 @@ show_header() {
     local backend="${CLAUDUX_BACKEND:-claude}"
     local powered_by="Claude AI"
     if [[ "$backend" == "codex" ]]; then
-        powered_by="Codex (GPT-5.4)"
+        local codex_model="${CODEX_MODEL:-gpt-5.4}"
+        local codex_effort="${CODEX_REASONING_EFFORT:-xhigh}"
+        powered_by="Codex (${codex_model}, ${codex_effort} reasoning)"
     fi
     echo "📚 claudux - ${PROJECT_NAME} Documentation"
     echo "Powered by $powered_by - Local CLI orchestration"
@@ -211,7 +213,9 @@ show_help() {
     echo ""
     echo "Environment:"
     echo "  FORCE_MODEL=opus|sonnet  - Select Claude model (default: sonnet)"
-    echo "  CLAUDUX_BACKEND=codex    - Use Codex/GPT-5.4 instead of Claude"
+    echo "  CLAUDUX_BACKEND=codex    - Use Codex instead of Claude"
+    echo "  CODEX_MODEL=...          - Select Codex model (default: gpt-5.4)"
+    echo "  CODEX_REASONING_EFFORT=... - Select Codex reasoning effort (default: xhigh)"
     echo "  CLAUDUX_MESSAGE=...      - Default directive if -m/--with not provided"
     echo ""
     echo "💡 The main update command automatically:"

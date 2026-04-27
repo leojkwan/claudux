@@ -91,11 +91,16 @@ assert_contains "default header mentions Claude AI" \
 # --- Test 12: show_header switches to Codex when CLAUDUX_BACKEND=codex ---
 (
     export CLAUDUX_BACKEND=codex
+    export CODEX_MODEL=gpt-5.5
+    export CODEX_REASONING_EFFORT=xhigh
     "$REPO_ROOT/bin/claudux" check 2>&1 | head -2
 ) > /tmp/claudux-test-header-codex 2>&1
 assert_contains "codex header mentions Codex" \
     "$(cat /tmp/claudux-test-header-codex)" \
-    "Powered by Codex"
+    "Powered by Codex (gpt-5.5, xhigh reasoning)"
+assert_not_contains "codex header does NOT hardcode GPT-5.4" \
+    "$(cat /tmp/claudux-test-header-codex)" \
+    "GPT-5.4"
 assert_not_contains "codex header does NOT say Claude AI" \
     "$(cat /tmp/claudux-test-header-codex)" \
     "Powered by Claude AI"
@@ -156,15 +161,27 @@ assert_not_contains "success() call for Prompt built does NOT hardcode ✅" \
     "$prompt_built_line" \
     'success "✅'
 
-# --- Test 17: failure log labels the correct backend ---
+# --- Test 17: failure log labels and troubleshooting match the correct backend ---
 # Regression guard for "❌ Claude CLI exited" printed when codex failed.
-fail_block=$(sed -n '/# Log backend invocation result/,/^    fi$/p' "$LIB_DIR/docs-generation.sh")
+fail_block=$(sed -n '/local backend_label=/,/exit "\$claude_exit_code"/p' "$LIB_DIR/docs-generation.sh")
 assert_contains "failure label is backend-aware" \
     "$fail_block" \
     'Codex CLI'
 assert_contains "failure label still handles claude backend" \
     "$fail_block" \
     'Claude CLI'
+assert_contains "codex failure points at Codex auth" \
+    "$fail_block" \
+    'codex login status'
+assert_contains "codex failure suggests supported model fallback" \
+    "$fail_block" \
+    'CODEX_MODEL=gpt-5.4'
+assert_contains "codex failure suggests Codex CLI upgrade" \
+    "$fail_block" \
+    'npm install -g @openai/codex'
+assert_not_contains "failure branch does NOT say Claude Code failed" \
+    "$fail_block" \
+    'Claude Code failed'
 
 # --- Test 18: manifest section patch mode removes Claude write tools ---
 # Deterministic docs mode must not hand the model whole-tree write permission.

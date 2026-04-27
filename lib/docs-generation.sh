@@ -846,10 +846,11 @@ $base_prompt"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
+    local backend_label="Claude CLI"
+    [[ "$backend" == "codex" ]] && backend_label="Codex CLI"
+
     # Log backend invocation result
     if [[ $claude_exit_code -ne 0 ]]; then
-        local backend_label="Claude CLI"
-        [[ "$backend" == "codex" ]] && backend_label="Codex CLI"
         warn "❌ $backend_label exited with code: $claude_exit_code"
         if [[ -f "$claude_log" ]]; then
             warn "📋 Last output from $backend_label:"
@@ -951,22 +952,39 @@ $base_prompt"
         save_claudux_state
 
     else
-        warn "Claude Code failed with exit code $claude_exit_code"
+        warn "$backend_label failed with exit code $claude_exit_code"
         echo ""
         warn "🔧 Troubleshooting steps:"
-        echo "   1. Check Claude CLI is authenticated:"
-        echo "      claude config get"
-        echo ""
-        echo "   2. Try with a different model:"
-        echo "      FORCE_MODEL=opus claudux update"
-        echo ""
-        echo "   3. Check internet connection"
-        echo ""
-        echo "   4. View full log:"
-        echo "      Check Claude logs for details"
-        echo ""
-        echo "   5. Report issue:"
-        echo "      https://github.com/anthropics/claude-code/issues"
+        if [[ "$backend" == "codex" ]]; then
+            local codex_stderr_log="${CODEX_STDERR_LOG:-/tmp/claudux-codex-stderr.log}"
+            echo "   1. Check Codex CLI is authenticated:"
+            echo "      codex login status"
+            echo ""
+            echo "   2. Try a supported Codex model:"
+            echo "      CODEX_MODEL=gpt-5.4 CLAUDUX_BACKEND=codex claudux update"
+            echo ""
+            echo "   3. If the selected model requires a newer Codex CLI, upgrade:"
+            echo "      npm install -g @openai/codex"
+            echo ""
+            echo "   4. View full stderr log:"
+            echo "      $codex_stderr_log"
+            echo ""
+            echo "   5. Check internet connection"
+        else
+            echo "   1. Check Claude CLI is authenticated:"
+            echo "      claude config get"
+            echo ""
+            echo "   2. Try with a different model:"
+            echo "      FORCE_MODEL=opus claudux update"
+            echo ""
+            echo "   3. Check internet connection"
+            echo ""
+            echo "   4. View full log:"
+            echo "      Check Claude logs for details"
+            echo ""
+            echo "   5. Report issue:"
+            echo "      https://github.com/anthropics/claude-code/issues"
+        fi
         
         exit "$claude_exit_code"
     fi
