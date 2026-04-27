@@ -133,7 +133,7 @@ Page deletion is guarded separately from section editing. With a manifest presen
 
 ## Content Protection Markers
 
-`lib/content-protection.sh` chooses literal marker pairs by file extension, and the deterministic helpers mirror the same pairs when they hash protected blocks:
+`lib/content-protection.sh` chooses literal marker pairs by file extension, and the deterministic helpers in `lib/docs-manifest.sh` mirror the same pairs when they index and guard protected blocks:
 
 - Markdown, HTML, XML, and Vue use `<!-- skip -->` / `<!-- /skip -->`.
 - JavaScript, TypeScript, Swift, Java, C-family, Rust, and Go use `// skip` / `// /skip`.
@@ -144,11 +144,12 @@ Page deletion is guarded separately from section editing. With a manifest presen
 
 Matching is trimmed, line-based, and literal. That means indented markers still count, and regex-looking markers such as `/* skip */` are handled as exact text rather than patterns.
 
-The same boundaries drive three separate behaviors:
+The current deterministic path uses those boundaries in two enforced places:
 
-- `strip_protected_content` removes protected blocks before prompt construction.
 - `build_static_analysis_index` records protected blocks across tracked project files with markers, line numbers, and hashes.
-- The guard snapshot re-validates both block count and block hashes after generation.
+- The guard snapshot captures recorded protected blocks and later rejects runs that remove one of those blocks or change a recorded block hash.
+
+`strip_protected_content` is still shipped as a utility helper in `lib/content-protection.sh` and covered by `tests/test-content-protection.sh`, but the manifest pipeline's protection guarantee comes from indexed block facts plus guard validation, not from a pre-prompt stripping pass inside `lib/docs-generation.sh`.
 
 Protected-block preservation is not limited to markdown docs. Any tracked file with a recognized marker pair can participate in the guard, which is why protected code snippets in `src/`, `tests/`, or top-level project files survive deterministic runs unchanged.
 
@@ -189,7 +190,8 @@ The guard snapshot enforces preservation rules that schema validation cannot pro
 
 - Captured pinned and required headings must stay in manifest order.
 - Pinned or otherwise read-only section bodies must keep the same hash unless pinned unlock is explicitly enabled.
-- Existing skip-marker blocks must keep the same count and content hash across docs and source files.
+- Files that carried recorded protected blocks must still exist on disk.
+- Recorded skip-marker blocks must keep at least the captured block count, and each captured block must keep the same content hash in order across docs and source files.
 
 ### Link validation and success markers
 
@@ -197,7 +199,7 @@ Link validation adds the docs-site checks on top of the manifest contract:
 
 - `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
 - It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
-- On the green path, `lib/validate-links.sh` prints `All internal links validated successfully!`, then `lib/ui.sh` calls `success "All links are valid!"` to add the shared single success prefix.
+- On the green path, `lib/validate-links.sh` prints `All internal links validated successfully!`, then `lib/ui.sh` adds the shared success prefix.
 - `tests/run-tests.sh` includes the regression guard for the success-marker fix: `claudux validate` must not emit a doubled success prefix.
 
 The success path does not run link validation twice. The failure path may re-run `lib/validate-links.sh --output <tmp>` to collect a machine-readable missing-file list for `--auto-fix` or the auto-fix pass inside `update()`.
