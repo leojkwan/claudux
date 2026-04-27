@@ -105,7 +105,7 @@ During guard validation, claudux tracks a slightly wider set:
 
 An intentional pinned rewrite needs two signals in the same run: `CLAUDUX_UNLOCK_PINNED_SECTIONS=1` in the environment and `unlock_pinned: true` on the individual patch. That keeps a model-only run from silently editing doctrine.
 
-Page deletion is guarded separately from section editing. When a manifest exists, `claudux cleanup` requires `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1`, and `claudux recreate` requires `CLAUDUX_ALLOW_MANIFEST_RECREATE=1`, before either path can remove manifest-owned docs.
+Page deletion is guarded separately from section editing. With a manifest present, the internal cleanup helper in `lib/cleanup.sh` refuses manifest-owned deletion unless `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1` is set, and `claudux recreate` refuses the same deletion unless `CLAUDUX_ALLOW_MANIFEST_RECREATE=1` is set. The current public CLI exposes `recreate`, not a standalone `cleanup` subcommand.
 
 ## Content Protection Markers
 
@@ -164,7 +164,7 @@ The guard snapshot enforces preservation rules that schema validation cannot pro
 - Pinned or otherwise read-only section bodies must keep the same hash unless pinned unlock is explicitly enabled.
 - Existing skip-marker blocks must keep the same count and content hash across docs and source files.
 
-Cleanup and recreate are validated by policy too. When `docs-structure.json` exists, `claudux cleanup` and `claudux recreate` both refuse manifest-owned deletion unless their explicit environment overrides are set.
+Deletion safeguards are validated by policy too. When `docs-structure.json` exists, the internal cleanup helper in `lib/cleanup.sh` refuses manifest-owned deletion unless `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1` is set, and `claudux recreate` refuses the same deletion unless `CLAUDUX_ALLOW_MANIFEST_RECREATE=1` is set.
 
 ## StrongYes Harness Example
 
