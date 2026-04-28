@@ -72,7 +72,7 @@ Backend controls stay explicit in patch mode: Claude is limited to `Read`, and C
 
 ## Static Analysis Index
 
-The static index is deterministic cache state written to `.claudux/index/static-analysis.json` by default. `CLAUDUX_INDEX_DIR` or `CLAUDUX_STATIC_INDEX_FILE` can relocate it; prompt construction always reads the resolved path.
+The static index is deterministic cache state written to `.claudux/index/static-analysis.json` by default. `CLAUDUX_INDEX_DIR` or `CLAUDUX_STATIC_INDEX_FILE` can relocate it, and prompt construction always reads the resolved path.
 
 `build_static_analysis_index()` rebuilds it from tracked files on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
 
@@ -95,7 +95,7 @@ Each run records stable facts rather than prose:
 
 ### Current claudux snapshot
 
-On the current checkout, the authoritative snapshot at `HEAD 236b1ceb9cafa988b14b80b9cd295ca5286f1d16` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
+On the current checkout, the authoritative snapshot at `HEAD 7154f5962b0bc32833b794583cb579c862cded05` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
 
 The manifest entry points at `docs-structure.json` with SHA-256 `0c066dfcdf27dcbef2cd805b29c4a71b52ccae21cc5b7bd42b51ff4f35711353`.
 
