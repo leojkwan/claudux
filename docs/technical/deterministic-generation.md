@@ -38,6 +38,8 @@ When `docs-structure.json` exists, claudux removes direct `docs/**` write author
 
 The extracted payload is staged at `.claudux/index/section-patches.json` by default, and `CLAUDUX_SECTION_PATCH_FILE` can relocate that file for tests or harnesses.
 
+Before the model answers, `format_section_patch_contract()` prints the live allowlist of patchable `page_id#section_id` targets plus the separate pinned or read-only list. The manifest is therefore the addressing surface, not an informal heading search over the repo.
+
 ### Extractor behavior
 
 - It scans raw output plus nested JSONL string fields named `text`, `content`, `result`, and `message`.
@@ -61,6 +63,8 @@ The extracted payload is staged at `.claudux/index/section-patches.json` by defa
 Write authority and source ownership are separate concerns. Section-level `source_patterns` influence impact scoping, but they do not make a section read-only. The read-only barrier comes from `pinned: true` or `generated: false`.
 
 The behavior is covered mechanically in `tests/test-docs-manifest.sh`, including repeated marker dedupe, echoed JSONL payload dedupe, conflicting payload rejection, truncated summary-marker rejection, incremental allowlist blocking, mixed-batch rollback, and same-or-higher-level heading rejection.
+
+If extraction or application fails, claudux does not guess. `update()` copies the backend JSONL log to a retained `/tmp/claudux-*.jsonl.*` file through `retain_generation_debug_log()`, which keeps the rejected patch payload available for inspection while leaving the docs tree untouched.
 
 Patch mode constrains filesystem authority, not provider compatibility. On the Codex path, `run_codex_exec()` always forwards `CODEX_MODEL` to `codex exec -m`, while `get_codex_model_settings()` only prettifies a few known labels such as `gpt-5.4` and `gpt-5.3-codex` for logs. Unknown model strings still run under a generic `Codex <model>` label, so a value such as `gpt-5.5` can appear in headers or progress output even when the installed Codex CLI cannot satisfy it.
 
@@ -86,6 +90,8 @@ Each run records stable facts rather than prose:
 - Internal markdown docs links.
 - Protected skip blocks with markers, line numbers, and hashes.
 - Manifest page and section source ownership.
+
+On the current claudux checkout, the authoritative snapshot at `HEAD f2aa78bb08feded182b8fd6fb2775ef90d88dfbe` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages. Those numbers come from `.claudux/index/static-analysis.json`, not from hand-maintained prose in this page.
 
 For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
@@ -281,7 +287,11 @@ The nested deterministic block includes:
 - `doc_section_hashes` for manifest sections currently found on disk.
 - `source_to_section_coverage` built from page and section `source_patterns`.
 
+That nested block is intentionally best-effort. If Node is unavailable or the static index cannot be read, `build_deterministic_state_metadata_json()` still returns a fallback object with `index: null`, `manifest_hash: null`, empty coverage arrays, and an optional `error`, so a successful docs run can still checkpoint freshness instead of failing after the docs are already updated.
+
 The checkpoint intentionally records the backend but not the selected model or reasoning effort. A failed or retried Codex run might bounce from `CODEX_MODEL=gpt-5.5` back to `CODEX_MODEL=gpt-5.4`, yet the persisted freshness state still answers the narrower question of which backend produced the docs.
+
+Failed runs do not advance the checkpoint. `save_claudux_state()` only runs on the success path after generation, patch application, post-generation validation, link-validation handling, and change analysis. If Codex rejects a requested model or section-patch extraction fails, claudux keeps the previous checkpoint and retains backend logs for debugging instead of writing a misleading fresh state.
 
 `claudux diff` compares `last_sha..HEAD`, and `claudux status` uses the same checkpoint to report generation time, backend, documented-file count, and how many commits behind HEAD the docs are when the saved SHA still exists.
 
