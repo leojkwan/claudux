@@ -848,6 +848,9 @@ const logFile = process.argv[2];
 const outputFile = process.argv[3];
 const raw = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
 const chunks = [];
+const startMarker = 'CLAUDUX_SECTION_PATCHES_JSON_START';
+const endMarker = 'CLAUDUX_SECTION_PATCHES_JSON_END';
+let insideRawPatchPayload = false;
 
 function collectStrings(value) {
   if (typeof value === 'string') {
@@ -872,14 +875,22 @@ function collectStrings(value) {
 for (const line of raw.split(/\r?\n/)) {
   if (!line.trim()) continue;
   try {
+    const before = chunks.length;
     collectStrings(JSON.parse(line));
+    if (chunks.length === before && insideRawPatchPayload) {
+      chunks.push(line);
+    }
   } catch {
     chunks.push(line);
   }
-}
 
-const startMarker = 'CLAUDUX_SECTION_PATCHES_JSON_START';
-const endMarker = 'CLAUDUX_SECTION_PATCHES_JSON_END';
+  if (line.includes(startMarker) && !line.includes(endMarker)) {
+    insideRawPatchPayload = true;
+  }
+  if (line.includes(endMarker)) {
+    insideRawPatchPayload = false;
+  }
+}
 
 function countMarker(text, marker) {
   return text.split(marker).length - 1;
