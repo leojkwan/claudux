@@ -95,7 +95,9 @@ Each run records stable facts rather than prose:
 
 ### Current claudux snapshot
 
-On the current checkout, the authoritative snapshot at `HEAD 919f48cb929eac4d1bb45678441b48dcb7367a10` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
+On the current checkout, the authoritative snapshot at `HEAD 236b1ceb9cafa988b14b80b9cd295ca5286f1d16` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
+
+The manifest entry points at `docs-structure.json` with SHA-256 `0c066dfcdf27dcbef2cd805b29c4a71b52ccae21cc5b7bd42b51ff4f35711353`.
 
 For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
@@ -107,7 +109,7 @@ The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-sna
 
 ### Boundary of the index
 
-The static index is authoritative for command existence and source ownership, not for provider-side model availability or VitePress route validity. Headers and status output may echo pass-through values such as `CODEX_MODEL`, but compatibility is checked at runtime, and VitePress nav/sidebar targets are validated later by `lib/validate-links.sh`.
+The static index is authoritative for command existence and source ownership, not for provider-side model availability or VitePress route validity. Headers and status output may echo pass-through values such as `CODEX_MODEL`, but compatibility is checked at runtime, and VitePress nav and sidebar targets are validated later by `lib/validate-links.sh`.
 
 ## docs-structure.json Manifest
 
