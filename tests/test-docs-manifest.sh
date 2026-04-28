@@ -500,6 +500,28 @@ NODE
 assert_contains "section patch extraction ignores truncated summary markers" "$(cat /tmp/claudux-manifest-t13g)" "1:generated-details:Summary-safe body."
 rm -rf "$TEST_DIR"
 
+# --- Test 13h: section patch payload extraction preserves raw JSON lines inside plain marker blocks ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '%s\n' \
+        'CLAUDUX_SECTION_PATCHES_JSON_START' \
+        '{"patches":[{"page_id":"technical.deterministic-generation","section_id":"generated-details","body_markdown":"First raw body."}]}' \
+        'CLAUDUX_SECTION_PATCHES_JSON_END' \
+        'CLAUDUX_SECTION_PATCHES_JSON_START' \
+        '{"patches":[{"page_id":"technical.deterministic-generation","section_id":"generated-details","body_markdown":"Second raw body."}]}' \
+        'CLAUDUX_SECTION_PATCHES_JSON_END' \
+        > /tmp/claudux-manifest-t13h-log.txt
+    if extract_section_patch_payload /tmp/claudux-manifest-t13h-log.txt /tmp/claudux-manifest-t13h-patches.json >/tmp/claudux-manifest-t13h-output 2>&1; then
+        echo "unexpected-pass"
+    else
+        cat /tmp/claudux-manifest-t13h-output
+    fi
+) > /tmp/claudux-manifest-t13h 2>&1
+assert_contains "section patch extraction rejects conflicting raw payload blocks" "$(cat /tmp/claudux-manifest-t13h)" "expected exactly one unique section patch payload"
+rm -rf "$TEST_DIR"
+
 # --- Test 14: incremental impact allowlist blocks unrelated generated sections ---
 TEST_DIR=$(setup_manifest_repo)
 (
