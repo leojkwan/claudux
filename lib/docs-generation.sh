@@ -278,6 +278,21 @@ claudux_status() {
     fi
 }
 
+retain_generation_debug_log() {
+    local log_file="$1"
+    local reason="${2:-generation-failure}"
+
+    [[ -f "$log_file" ]] || return 0
+    [[ -s "$log_file" ]] || return 0
+
+    local safe_reason retained
+    safe_reason=$(printf '%s' "$reason" | tr -c 'A-Za-z0-9_.-' '-')
+    retained=$(mktemp "/tmp/claudux-${safe_reason}.jsonl.XXXXXX" 2>/dev/null || mktemp)
+    cp "$log_file" "$retained" 2>/dev/null || return 0
+    warn "🧾 Retained backend JSONL log:"
+    echo "      $retained"
+}
+
 
 # Build the comprehensive prompt for Claude
 build_generation_prompt() {
@@ -869,7 +884,10 @@ $base_prompt"
     if [[ $claude_exit_code -eq 0 ]]; then
         if $section_patch_mode; then
             local section_patch_file="${CLAUDUX_SECTION_PATCH_FILE:-${CLAUDUX_INDEX_DIR:-.claudux/index}/section-patches.json}"
-            extract_section_patch_payload "$claude_log" "$section_patch_file" || error_exit "Section patch mode did not produce valid patch JSON"
+            if ! extract_section_patch_payload "$claude_log" "$section_patch_file"; then
+                retain_generation_debug_log "$claude_log" "section-patch-failure"
+                error_exit "Section patch mode did not produce valid patch JSON"
+            fi
             apply_manifest_section_patches "$section_patch_file" || error_exit "Section patch application failed"
         fi
 
@@ -953,6 +971,7 @@ $base_prompt"
 
     else
         warn "$backend_label failed with exit code $claude_exit_code"
+        retain_generation_debug_log "$claude_log" "backend-failure"
         echo ""
         warn "🔧 Troubleshooting steps:"
         if [[ "$backend" == "codex" ]]; then
