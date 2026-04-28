@@ -76,6 +76,8 @@ The static index is deterministic cache state written to `.claudux/index/static-
 
 `build_static_analysis_index()` rebuilds it from tracked files on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
 
+### Recorded facts
+
 Each run records stable facts rather than prose:
 
 - `head_sha`.
@@ -91,7 +93,9 @@ Each run records stable facts rather than prose:
 - Protected skip blocks with markers, line numbers, and hashes.
 - Manifest page and section source ownership.
 
-On the current claudux checkout, the authoritative snapshot at `HEAD f2aa78bb08feded182b8fd6fb2775ef90d88dfbe` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages. Those numbers come from `.claudux/index/static-analysis.json`, not from hand-maintained prose in this page.
+### Current claudux snapshot
+
+On the current checkout, the authoritative snapshot at `HEAD 919f48cb929eac4d1bb45678441b48dcb7367a10` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
 
 For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
@@ -101,13 +105,9 @@ The model does not receive the full JSON blob. `format_static_analysis_index_con
 
 The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-snapshot.json`, and `impacted-docs.json` omit wall-clock timestamps, so identical repo state produces byte-stable deterministic artifacts.
 
-### Backend-selection facts
+### Boundary of the index
 
-The static index is authoritative for command existence and ownership, not for provider-side model availability. It can prove that `claudux check`, `claudux help`, `claudux update`, and the Codex-specific environment knobs are part of the shipped CLI surface, but it does not carry a support matrix for Codex model IDs.
-
-Runtime backend wording comes from `bin/claudux` and `lib/ui.sh`. `show_header` and `claudux check` echo `CLAUDUX_BACKEND`, `CODEX_MODEL`, and `CODEX_REASONING_EFFORT` verbatim, so if an operator exports `CODEX_MODEL=gpt-5.5`, the UI will report `gpt-5.5`.
-
-That echo is configuration state, not a compatibility guarantee. The shipped default and the documented recovery baseline remain `gpt-5.4`, so deterministic docs should treat `gpt-5.4` as the safe fallback and describe newer model strings as pass-through values that may require a newer Codex CLI.
+The static index is authoritative for command existence and source ownership, not for provider-side model availability or VitePress route validity. Headers and status output may echo pass-through values such as `CODEX_MODEL`, but compatibility is checked at runtime, and VitePress nav/sidebar targets are validated later by `lib/validate-links.sh`.
 
 ## docs-structure.json Manifest
 
@@ -201,7 +201,7 @@ Manifest validation covers contract correctness:
 
 - JSON shape, unique page IDs, unique page paths, unique deterministic order values, and `docs/*.md` page paths.
 - Stable manifest keys for navigation IDs, page IDs, section IDs, and `nav_group`.
-- Strict enums for deletion-policy and generated-section defaults.
+- Strict enums for deletion policy and generated-section defaults.
 - Non-empty navigation titles, root-relative docs links, and navigation targets that resolve to manifest pages.
 - Repo-root-relative `source_patterns` and real boolean values for `pinned`, `generated`, and `required`.
 - Unique section IDs plus unambiguous `level + heading` anchors within each page.
@@ -215,39 +215,43 @@ The guard snapshot enforces preservation rules that schema validation cannot pro
 - Files that carried recorded protected blocks must still exist on disk.
 - Recorded skip-marker blocks must keep at least the captured block count, and each captured block must keep the same content hash in order across docs and source files.
 
-### Link validation and success markers
+### VitePress proof
 
-Link validation adds the docs-site checks on top of the manifest contract:
+Current claudux site proof comes from `docs/.vitepress/config.ts` plus `lib/validate-links.sh`:
 
-- `lib/validate-links.sh` first runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors.
-- It then resolves VitePress nav and sidebar links against `docs/index.md`, `docs/<path>/index.md`, or `docs/<path>.md` and reports any missing targets.
+- `base` is `process.env.DOCS_BASE || '/'`, `cleanUrls` is enabled, and the outline is `level: [2, 3]` with label `On this page`.
+- The top nav order is `Guide`, `Features`, `Technical`, and `API`, which matches `docs-structure.json.navigation`.
+- The sidebar defines `'/'`, `'/guide/'`, `'/features/'`, and `'/technical/'`. The root `'/'` entry is what keeps the sidebar visible on the homepage and provides the site-wide fallback.
+- The current internal nav/sidebar targets all resolve to checked-in docs files: `/guide/`, `/guide/installation`, `/guide/commands`, `/guide/configuration`, `/features/`, `/features/two-phase-generation`, `/features/smart-cleanup`, `/features/content-protection`, `/technical/`, `/technical/templates`, `/technical/deterministic-generation`, `/examples/`, `/api/`, and `/troubleshooting`.
+- Social links are absolute GitHub and npm URLs, not placeholders.
+
+`lib/validate-links.sh` proves those targets by extracting every `link:` entry from the VitePress config, resolving `/` to `docs/index.md`, `/path/` to `docs/path/index.md`, and `/path` to `docs/path.md`, and failing on any missing internal target. Before route checking it also runs `check_duplicate_ids()` across explicit markdown `{#id}` anchors. Hash fragments are stripped for file existence checks, so the validator proves route targets and explicit anchor uniqueness, not arbitrary heading text.
+
+### Link validation behavior
+
+Link validation adds docs-site checks on top of the manifest contract:
+
 - On the green path, `lib/validate-links.sh` prints `All internal links validated successfully!`, then `lib/ui.sh` adds the shared success prefix.
-- `tests/run-tests.sh` includes the regression guard for the success-marker fix: `claudux validate` must not emit a doubled success prefix.
+- The failure path may re-run `lib/validate-links.sh --output <tmp>` to collect a machine-readable missing-file list for the single auto-fix pass; `--strict` turns any remaining broken links into a hard error.
+- `tests/run-tests.sh` includes the regression guard that `claudux validate` must not emit a doubled success prefix.
 
-The success path does not run link validation twice. The failure path may re-run `lib/validate-links.sh --output <tmp>` to collect a machine-readable missing-file list for `--auto-fix` or the auto-fix pass inside `update()`.
+### Backend-aware verification boundary
 
-Deletion safeguards are validated by policy too. When `docs-structure.json` exists, the internal cleanup helper in `lib/cleanup.sh` refuses manifest-owned deletion unless `CLAUDUX_ALLOW_MANIFEST_CLEANUP=1` is set, and `claudux recreate` refuses the same deletion unless `CLAUDUX_ALLOW_MANIFEST_RECREATE=1` is set.
-
-### Backend-aware failure handling
-
-The verification path distinguishes between configuration echo, backend preflight, and true generation failure:
+Verification intentionally distinguishes between configuration echo, backend preflight, and true generation failure:
 
 - `show_header` and `claudux check` report the active backend plus the current `CODEX_MODEL` and `CODEX_REASONING_EFFORT`, but they do not prove that the selected model is supported by the installed Codex CLI.
 - Commands that actually invoke a model go through `check_generation_backend()`. On the Codex path, that means `check_codex()` must find the CLI and verify auth before generation starts.
-- `check_codex()` prefers the zero-token `codex login status` probe. If the installed CLI is older and lacks that subcommand, claudux falls back to a minimal `codex exec` probe, warns that the legacy path wastes roughly 28K tokens, and reuses the active `CODEX_MODEL`. That means a too-new model ID can be rejected during backend preflight on legacy CLI instead of later during the main run.
-- If a Codex run fails after launch, `update()` labels the failure as `Codex CLI`, not Claude, and prints the concrete recovery sequence baked into the tool: run `codex login status`, retry with `CODEX_MODEL=gpt-5.4 CLAUDUX_BACKEND=codex claudux update`, upgrade with `npm install -g @openai/codex` if the requested model needs a newer CLI, inspect `CODEX_STDERR_LOG` or `/tmp/claudux-codex-stderr.log`, and then rule out connectivity issues.
-
-That split matters for dogfooding. A header that says `Powered by Codex (gpt-5.5, xhigh reasoning)` only means the environment requested that model. The supported fallback that claudux documents, tests, and suggests on failure is still `gpt-5.4`.
+- If a backend or patch-mode run still fails after launch, `update()` retains the raw JSONL log through `retain_generation_debug_log()` and prints backend-specific recovery steps instead of checkpointing a misleading success.
 
 ### Read-only sandbox dogfood note
 
-Dogfooding claudux against claudux in a read-only agent sandbox surfaced environment failures before logical validation:
+Dogfooding claudux against claudux in a read-only agent sandbox currently surfaces environment failures before logical validation:
 
-- `./bin/claudux validate` aborted in `lib/docs-manifest.sh` with `line 38: cannot create temp file for here document: Operation not permitted`.
-- `bash tests/test-docs-manifest.sh` failed during scratch-repo and temp-file setup with errors such as `mktemp: mkdtemp failed ... Operation not permitted` and `fatal: Unable to create .../index.lock: Operation not permitted`.
-- `bash tests/test-content-protection.sh` and `bash tests/test-backend-router.sh` likewise failed when writing under `/tmp` or `$TMPDIR`.
+- `./bin/claudux validate` aborts in `lib/docs-manifest.sh` before manifest validation when the sandbox cannot create temporary files.
+- `bash tests/test-docs-manifest.sh` fails during `mktemp -d`, scratch-repo setup, git lockfile creation under `.git/worktrees/.../index.lock`, and fixture file writes inside the test repo.
+- `bash tests/test-content-protection.sh` fails on temp-file creation and fixture writes, which then cascades into missing-file assertion failures.
 
-Those failures were sandbox write failures, not manifest, patch-mode, or link-resolution regressions in the checked-in code. The validator and tests assume writable temp storage, writable scratch repos, and normal git lockfile creation.
+Those are sandbox write failures, not manifest, patch-mode, or VitePress-route regressions in the checked-in code. The validator and test harness assume writable temp storage, writable scratch repos, and normal git lockfile creation.
 
 ## StrongYes Harness Example
 
