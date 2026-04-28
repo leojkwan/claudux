@@ -213,6 +213,21 @@ assert_contains "Codex normal mode still defaults to danger-full-access" \
     "$codex_exec_body" \
     'danger-full-access'
 
+# --- Test 20: failed backend / patch extraction keeps the raw JSONL log ---
+retain_fn=$(sed -n '/^retain_generation_debug_log()/,/^}/p' "$LIB_DIR/docs-generation.sh")
+assert_contains "docs-generation defines debug log retention helper" \
+    "$retain_fn" \
+    'Retained backend JSONL log'
+assert_contains "debug log retention writes a /tmp claudux jsonl copy" \
+    "$retain_fn" \
+    '/tmp/claudux-'
+assert_contains "section patch failure retains the backend log" \
+    "$update_fn" \
+    'retain_generation_debug_log "$claude_log" "section-patch-failure"'
+assert_contains "backend nonzero failure retains the backend log" \
+    "$fail_block" \
+    'retain_generation_debug_log "$claude_log" "backend-failure"'
+
 # Cleanup
 rm -f /tmp/claudux-test-backend-default /tmp/claudux-test-backend-codex /tmp/claudux-test-missing
 rm -f /tmp/claudux-test-header-claude /tmp/claudux-test-header-codex
