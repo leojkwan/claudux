@@ -95,7 +95,7 @@ Each run records stable facts rather than prose:
 
 ### Current claudux snapshot
 
-On the current checkout, the authoritative snapshot at `HEAD 7154f5962b0bc32833b794583cb579c862cded05` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
+On the current checkout, the authoritative snapshot at `HEAD 0670a42e0591caa112dab098b9afe42d800ab00d` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
 
 The manifest entry points at `docs-structure.json` with SHA-256 `0c066dfcdf27dcbef2cd805b29c4a71b52ccae21cc5b7bd42b51ff4f35711353`.
 
@@ -118,6 +118,7 @@ The static index is authoritative for command existence and source ownership, no
 The manifest is the operational contract for docs structure. `claudux.md` can influence taste, but the manifest owns patch addresses, navigation targets, required headings, source ownership, and deletion authority. When both `docs-structure.json` and `docs-map.md` exist, `build_generation_prompt()` treats the manifest as primary and keeps `docs-map.md` as supplemental legacy guidance only.
 
 Key semantics are enforced mechanically:
+
 - Root `deletion_policy` must be `manifest_pages_require_manifest_change`.
 - Root `generated_sections_default` must be `bounded_patch`.
 - Each page `deletion_policy` must be `never_delete_without_manifest_change`.
@@ -137,12 +138,14 @@ Those rules keep structure changes reviewable as manifest diffs instead of letti
 Pinned is the write barrier. Required is the existence barrier.
 
 During patch application:
+
 - Ordinary generated sections can be rewritten when they are inside the current impact allowlist.
 - Sections with `pinned: true` are read-only by default.
 - Sections with `generated: false` are read-only by the same guard, even if they are not pinned.
 - Section-level `source_patterns` affect incremental ownership and allowlist scope, but they do not make a section read-only. A generated section can be source-owned and still remain patchable.
 
 During guard validation, claudux tracks every pinned section plus every section that is still required:
+
 - Pinned and required headings must still exist on disk after generation.
 - That captured sequence must stay in manifest order within the page.
 - Only read-only section bodies are hash-locked; editable generated sections can change as long as they stay within their declared boundary.
@@ -180,11 +183,13 @@ Protected-block preservation is not limited to markdown docs. Any tracked file w
 Incremental mode starts from the changed-file set derived from `.claudux-state.json`, then resolves that set through manifest ownership and reverse dependency edges from the static index. The expansion is intentionally upstream: if `lib/ui.sh` changes, `bin/claudux` is pulled into scope because the router sources that library. That matters for pages like `home.index`, which own `bin/claudux` but do not own `lib/ui.sh` directly. Pages such as `api.index` may also move into scope on the same change, but there the direct `lib/*.sh` page ownership already matches before the reverse edge is even considered.
 
 Dependency edges come from more than shell `source` statements:
+
 - Shell-like files contribute `source` and `.` relationships.
 - `bin/claudux` contributes explicit edges for every file in `REQUIRED_LIBS`, plus the conditional `lib/codex-utils.sh` source.
 - `package.json` scripts contribute edges when they reference repo files under `bin/`, `lib/`, `tests/`, or `scripts/`.
 
 `resolve_impacted_docs_from_changed_files()` writes `.claudux/index/impacted-docs.json` by default, or the path from `CLAUDUX_IMPACT_ALLOWLIST_FILE`, with `changed_files`, `expanded_files`, `dependency_notes`, `pages`, and `sections`. Patch mode then uses that file as the incremental allowlist:
+
 - A section with its own `source_patterns` must be directly impacted to be patchable in an incremental run.
 - A generated section without its own ownership can be patched when its page is impacted.
 - Full scans skip the allowlist and can touch any non-pinned generated section in the manifest.
@@ -279,6 +284,7 @@ Claudux's own `docs-structure.json` keeps this section pinned as doctrine, but i
 `.claudux-state.json` is the local freshness checkpoint that powers `claudux diff` and `claudux status`. It is developer-local, ignored by git, and separate from the deterministic cache artifacts under `.claudux/index/`.
 
 A successful save writes:
+
 - `last_sha`: the Git `HEAD` recorded at checkpoint time.
 - `last_run`: the wall-clock timestamp for that successful save.
 - `backend`: the active backend, such as `claude` or `codex`.
@@ -286,6 +292,7 @@ A successful save writes:
 - `deterministic`: metadata derived from the static analysis index.
 
 The nested deterministic block includes:
+
 - `prompt_version`.
 - `index.path`, `index.version`, and `index.head_sha`.
 - `manifest_hash`.
