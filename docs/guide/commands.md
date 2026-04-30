@@ -69,7 +69,7 @@ Show files that have changed since the last documentation generation.
 claudux diff
 ```
 
-Compares the current HEAD against the checkpoint SHA stored in `.claudux-state.json`. Lists all modified, added, or deleted files that may need doc updates.
+Compares the current HEAD against the checkpoint SHA stored in `.claudux-state.json`, then adds uncommitted documentation/config changes such as `docs/**`, `docs-structure.json`, `docs-map.md`, `.ai-docs-style.md`, and `docs-site-plan.json`. Lists all modified, added, deleted, staged, or untracked files that may need doc updates.
 
 ### `claudux status`
 
@@ -84,6 +84,7 @@ Displays:
 - Backend used (Claude or Codex)
 - Documented file count
 - Commits behind HEAD (if stale)
+- Uncommitted documentation/config changes (if the checkpoint commit is otherwise fresh)
 
 ### `claudux validate`
 

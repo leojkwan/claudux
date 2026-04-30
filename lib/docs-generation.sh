@@ -185,6 +185,29 @@ load_claudux_state() {
     return 0
 }
 
+# Files that affect generated documentation freshness even before they are
+# committed. `last_sha..HEAD` alone misses the common dogfood case where
+# claudux has just patched tracked docs/config files in the worktree.
+claudux_docs_worktree_changes() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local pathspecs=(
+        "docs/"
+        "docs-structure.json"
+        "docs-map.md"
+        ".ai-docs-style.md"
+        "docs-site-plan.json"
+    )
+
+    {
+        git diff --name-only -- "${pathspecs[@]}" 2>/dev/null || true
+        git diff --name-only --cached -- "${pathspecs[@]}" 2>/dev/null || true
+        git ls-files --others --exclude-standard -- "${pathspecs[@]}" 2>/dev/null || true
+    } | sed '/^$/d' | sort -u
+}
+
 # Show what changed since last doc generation.
 # Outputs list of files that were modified since the last checkpoint SHA.
 claudux_diff_since_last() {
@@ -218,7 +241,10 @@ claudux_diff_since_last() {
         return 1
     fi
 
-    git diff --name-only "$last_sha"..HEAD 2>/dev/null
+    {
+        git diff --name-only "$last_sha"..HEAD 2>/dev/null || true
+        claudux_docs_worktree_changes
+    } | sed '/^$/d' | sort -u
 }
 
 # Show documentation freshness report.
@@ -260,21 +286,56 @@ claudux_status() {
     echo "  Backend:        $backend"
     echo "  Documented files: $file_count"
 
+    local dirty_docs dirty_doc_count
+    dirty_docs=$(claudux_docs_worktree_changes 2>/dev/null || true)
+    dirty_doc_count=0
+    if [[ -n "$dirty_docs" ]]; then
+        dirty_doc_count=$(printf '%s\n' "$dirty_docs" | sed '/^$/d' | wc -l | tr -d ' ')
+    fi
+
     # Show how many commits behind
     if [[ "$last_sha" != "unknown" ]] && git cat-file -t "$last_sha" >/dev/null 2>&1; then
         local head_sha
         head_sha=$(git rev-parse HEAD 2>/dev/null)
         if [[ "$head_sha" == "$last_sha" ]]; then
             echo ""
-            success "Docs are up to date with HEAD."
+            if [[ "$dirty_doc_count" -gt 0 ]]; then
+                warn "Docs have $dirty_doc_count uncommitted documentation/config change(s)."
+                echo "  Run 'claudux diff' to see changed files."
+                echo "  Commit, discard, or rerun 'claudux update' after review."
+            else
+                success "Docs are up to date with HEAD."
+            fi
         else
             local commits_behind
             commits_behind=$(git rev-list "$last_sha"..HEAD 2>/dev/null | wc -l | tr -d ' ')
             echo ""
             warn "Docs are $commits_behind commit(s) behind HEAD."
+            if [[ "$dirty_doc_count" -gt 0 ]]; then
+                warn "Docs also have $dirty_doc_count uncommitted documentation/config change(s)."
+            fi
             echo "  Run 'claudux diff' to see changed files."
             echo "  Run 'claudux update' to regenerate."
         fi
+    fi
+}
+
+refresh_deterministic_generation_caches() {
+    local changed_files="${1:-}"
+    local impact_allowlist_file="${2:-}"
+
+    if declare -F build_static_analysis_index >/dev/null 2>&1; then
+        build_static_analysis_index || return 1
+    fi
+
+    if [[ -n "$changed_files" ]] && [[ -n "$impact_allowlist_file" ]] && declare -F resolve_impacted_docs_from_changed_files >/dev/null 2>&1; then
+        CLAUDUX_CHANGED_FILES="$changed_files" CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file" \
+            resolve_impacted_docs_from_changed_files >/dev/null || return 1
+        export CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file"
+    fi
+
+    if declare -F capture_docs_structure_guard_snapshot >/dev/null 2>&1; then
+        capture_docs_structure_guard_snapshot || return 1
     fi
 }
 
@@ -591,6 +652,8 @@ update() {
     done
     # Resolve backend up-front so subsequent prints stay accurate.
     local backend="${CLAUDUX_BACKEND:-claude}"
+    local incremental_changed_files=""
+    local incremental_impact_allowlist_file=""
 
     info "📊 Starting documentation update and cleanup..."
     echo ""
@@ -673,6 +736,8 @@ $prompt"
                 impacted_docs=$(CLAUDUX_CHANGED_FILES="$changed_files" CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file" resolve_impacted_docs_from_changed_files 2>/dev/null || true)
                 if [[ -f "$impact_allowlist_file" ]]; then
                     export CLAUDUX_IMPACT_ALLOWLIST_FILE="$impact_allowlist_file"
+                    incremental_changed_files="$changed_files"
+                    incremental_impact_allowlist_file="$impact_allowlist_file"
                 fi
             fi
             local base_prompt="$prompt"
@@ -961,7 +1026,11 @@ $base_prompt"
                 fi
             fi
         fi
-        
+
+        if declare -F refresh_deterministic_generation_caches >/dev/null 2>&1; then
+            refresh_deterministic_generation_caches "$incremental_changed_files" "$incremental_impact_allowlist_file" || error_exit "Deterministic cache refresh failed"
+        fi
+
         # Show detailed change summary
         info "📋 Step 4: Analyzing changes made..."
         show_detailed_changes

@@ -148,6 +148,12 @@ recreate_docs() {
         error_exit "Recreate would delete manifest-owned documentation. Edit docs-structure.json first, or set CLAUDUX_ALLOW_MANIFEST_RECREATE=1 for an explicit destructive rebuild."
     fi
 
+    if declare -F validate_dependencies >/dev/null 2>&1; then
+        validate_dependencies
+    elif declare -F check_generation_backend >/dev/null 2>&1; then
+        check_generation_backend
+    fi
+
     warn "🗑️  This will completely delete all documentation and start fresh!"
     print_color "RED" "⚠️  This action cannot be undone."
     echo ""

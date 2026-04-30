@@ -227,7 +227,56 @@ TEST_DIR=$(setup_repo)
 assert_eq "grep/sed SHA parsing works" "match" "$(cat /tmp/claudux-diff-t9)"
 rm -rf "$TEST_DIR"
 
+# --- Test 10: Dirty tracked docs are reported even when HEAD matches checkpoint ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+
+    echo "dirty tracked body" >> docs/index.md
+
+    claudux_diff_since_last 2>&1
+) > /tmp/claudux-diff-t10 2>&1
+assert_contains "dirty tracked docs appear in diff" "$(cat /tmp/claudux-diff-t10)" "docs/index.md"
+rm -rf "$TEST_DIR"
+
+# --- Test 11: Staged docs are reported even when HEAD matches checkpoint ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+
+    echo "staged body" >> docs/index.md
+    git add docs/index.md
+
+    claudux_diff_since_last 2>&1
+) > /tmp/claudux-diff-t11 2>&1
+assert_contains "staged docs appear in diff" "$(cat /tmp/claudux-diff-t11)" "docs/index.md"
+rm -rf "$TEST_DIR"
+
+# --- Test 12: Untracked docs are reported even when HEAD matches checkpoint ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+
+    echo "# New" > docs/new.md
+
+    claudux_diff_since_last 2>&1
+) > /tmp/claudux-diff-t12 2>&1
+assert_contains "untracked docs appear in diff" "$(cat /tmp/claudux-diff-t12)" "docs/new.md"
+rm -rf "$TEST_DIR"
+
 # Cleanup
-rm -f /tmp/claudux-diff-t{1,2,3,4,5,6,7,8,9}
+rm -f /tmp/claudux-diff-t{1,2,3,4,5,6,7,8,9,10,11,12}
 
 test_summary
