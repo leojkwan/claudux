@@ -220,6 +220,70 @@ assert_contains "guard snapshot omits wall-clock timestamp" "$(cat /tmp/claudux-
 assert_contains "impact allowlist omits wall-clock timestamp" "$(cat /tmp/claudux-manifest-t5b)" "impacted-docs.json:generated_at=false"
 rm -rf "$TEST_DIR"
 
+# --- Test 5c: post-patch deterministic cache refresh records final docs bytes ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    source "$LIB_DIR/docs-generation.sh"
+    CLAUDUX_INDEX_DIR="$TEST_DIR/.claudux/index"
+    CLAUDUX_STATIC_INDEX_FILE="$TEST_DIR/.claudux/index/static-analysis.json"
+    CLAUDUX_GUARD_SNAPSHOT_FILE="$TEST_DIR/.claudux/index/docs-guard-snapshot.json"
+    CLAUDUX_IMPACT_ALLOWLIST_FILE="$TEST_DIR/.claudux/index/impacted-docs.json"
+
+    build_static_analysis_index >/dev/null
+    capture_docs_structure_guard_snapshot >/dev/null
+    CLAUDUX_CHANGED_FILES=$'lib/docs-manifest.sh' CLAUDUX_IMPACT_ALLOWLIST_FILE="$CLAUDUX_IMPACT_ALLOWLIST_FILE" resolve_impacted_docs_from_changed_files >/dev/null
+    cp "$CLAUDUX_STATIC_INDEX_FILE" /tmp/claudux-manifest-t5c-static-before.json
+    cp "$CLAUDUX_GUARD_SNAPSHOT_FILE" /tmp/claudux-manifest-t5c-guard-before.json
+
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "Refreshed generated body.\n\nExtra line that shifts following section anchors."' \
+        '    }' \
+        '  ]' \
+        '}' > /tmp/claudux-section-patches-t5c.json
+    CLAUDUX_IMPACT_ALLOWLIST_FILE="$CLAUDUX_IMPACT_ALLOWLIST_FILE" apply_manifest_section_patches /tmp/claudux-section-patches-t5c.json >/dev/null
+
+    refresh_deterministic_generation_caches $'lib/docs-manifest.sh' "$CLAUDUX_IMPACT_ALLOWLIST_FILE" >/dev/null
+    if ! cmp -s /tmp/claudux-manifest-t5c-static-before.json "$CLAUDUX_STATIC_INDEX_FILE"; then
+        echo "static-index-refreshed:true"
+    fi
+    if ! cmp -s /tmp/claudux-manifest-t5c-guard-before.json "$CLAUDUX_GUARD_SNAPSHOT_FILE"; then
+        echo "guard-snapshot-refreshed:true"
+    fi
+    cp "$CLAUDUX_STATIC_INDEX_FILE" /tmp/claudux-manifest-t5c-static-after.json
+    cp "$CLAUDUX_GUARD_SNAPSHOT_FILE" /tmp/claudux-manifest-t5c-guard-after.json
+    cp "$CLAUDUX_IMPACT_ALLOWLIST_FILE" /tmp/claudux-manifest-t5c-impact-after.json
+
+    sleep 1
+    refresh_deterministic_generation_caches $'lib/docs-manifest.sh' "$CLAUDUX_IMPACT_ALLOWLIST_FILE" >/dev/null
+
+    cmp -s /tmp/claudux-manifest-t5c-static-after.json "$CLAUDUX_STATIC_INDEX_FILE" && echo "static-index-stable-after-refresh:true"
+    cmp -s /tmp/claudux-manifest-t5c-guard-after.json "$CLAUDUX_GUARD_SNAPSHOT_FILE" && echo "guard-snapshot-stable-after-refresh:true"
+    cmp -s /tmp/claudux-manifest-t5c-impact-after.json "$CLAUDUX_IMPACT_ALLOWLIST_FILE" && echo "impact-allowlist-stable-after-refresh:true"
+    node - "$CLAUDUX_STATIC_INDEX_FILE" docs/technical/deterministic-generation.md <<'NODE'
+const fs = require('fs');
+const crypto = require('crypto');
+const index = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const docPath = process.argv[3];
+const expected = crypto.createHash('sha256').update(fs.readFileSync(docPath)).digest('hex');
+const actual = (index.docs_files || []).find(file => file.path === docPath)?.sha256;
+console.log(`static-index-doc-sha-current:${actual === expected}`);
+NODE
+) > /tmp/claudux-manifest-t5c 2>&1
+assert_contains "post-patch refresh updates static index" "$(cat /tmp/claudux-manifest-t5c)" "static-index-refreshed:true"
+assert_contains "post-patch refresh updates guard snapshot" "$(cat /tmp/claudux-manifest-t5c)" "guard-snapshot-refreshed:true"
+assert_contains "post-patch static index is byte-stable" "$(cat /tmp/claudux-manifest-t5c)" "static-index-stable-after-refresh:true"
+assert_contains "post-patch guard snapshot is byte-stable" "$(cat /tmp/claudux-manifest-t5c)" "guard-snapshot-stable-after-refresh:true"
+assert_contains "post-patch impact allowlist is byte-stable" "$(cat /tmp/claudux-manifest-t5c)" "impact-allowlist-stable-after-refresh:true"
+assert_contains "post-patch static index records final docs bytes" "$(cat /tmp/claudux-manifest-t5c)" "static-index-doc-sha-current:true"
+rm -rf "$TEST_DIR"
+
 # --- Test 6: duplicate page IDs fail schema validation ---
 TEST_DIR=$(setup_manifest_repo)
 (
@@ -653,6 +717,20 @@ assert_contains "recreate guard blocks manifest docs deletion" "$(cat /tmp/claud
 assert_contains "recreate guard preserves manifest page" "$(cat /tmp/claudux-manifest-t18)" "manifest-page-still-exists"
 rm -rf "$TEST_DIR"
 
+# --- Test 18b: recreate CLI checks manifest deletion guard before backend validation ---
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    CLAUDUX_BACKEND=codex CODEX_MODEL=not-a-real-model bash "$REPO_ROOT/bin/claudux" recreate >/tmp/claudux-manifest-t18b-output 2>&1
+    echo "exit:$?"
+    cat /tmp/claudux-manifest-t18b-output
+    test -f docs/technical/deterministic-generation.md && echo "manifest-page-still-exists"
+) > /tmp/claudux-manifest-t18b 2>&1
+assert_contains "recreate CLI exits before destructive backend path" "$(cat /tmp/claudux-manifest-t18b)" "exit:1"
+assert_contains "recreate CLI reports manifest deletion guard first" "$(cat /tmp/claudux-manifest-t18b)" "Recreate would delete manifest-owned documentation"
+assert_contains "recreate CLI guard preserves manifest page" "$(cat /tmp/claudux-manifest-t18b)" "manifest-page-still-exists"
+rm -rf "$TEST_DIR"
+
 # --- Test 19: manifest rejects malformed source pattern entries before impact mapping ---
 TEST_DIR=$(setup_manifest_repo)
 (
@@ -871,6 +949,8 @@ rm -rf "$TEST_DIR"
 rm -f /tmp/claudux-manifest-t1 /tmp/claudux-manifest-t2 /tmp/claudux-manifest-t3
 rm -f /tmp/claudux-manifest-t4 /tmp/claudux-manifest-t5 /tmp/claudux-manifest-t6
 rm -f /tmp/claudux-manifest-t5b /tmp/claudux-manifest-t5b-static-first.json /tmp/claudux-manifest-t5b-guard-first.json /tmp/claudux-manifest-t5b-impact-first.json
+rm -f /tmp/claudux-manifest-t5c /tmp/claudux-manifest-t5c-static-before.json /tmp/claudux-manifest-t5c-guard-before.json
+rm -f /tmp/claudux-manifest-t5c-static-after.json /tmp/claudux-manifest-t5c-guard-after.json /tmp/claudux-manifest-t5c-impact-after.json
 rm -f /tmp/claudux-manifest-t7 /tmp/claudux-manifest-t8 /tmp/claudux-manifest-t9
 rm -f /tmp/claudux-manifest-t10 /tmp/claudux-manifest-t11 /tmp/claudux-manifest-t12 /tmp/claudux-manifest-t13 /tmp/claudux-manifest-t14
 rm -f /tmp/claudux-manifest-t15 /tmp/claudux-manifest-t16 /tmp/claudux-manifest-t17 /tmp/claudux-manifest-t18
@@ -883,6 +963,7 @@ rm -f /tmp/claudux-manifest-t13b /tmp/claudux-manifest-t13b-log.jsonl /tmp/claud
 rm -f /tmp/claudux-manifest-t13c /tmp/claudux-manifest-t13c-log.jsonl /tmp/claudux-manifest-t13c-output /tmp/claudux-manifest-t13c-patches.json
 rm -f /tmp/claudux-manifest-t14-index /tmp/claudux-manifest-t14-impact /tmp/claudux-manifest-t14-allowlist.json /tmp/claudux-manifest-t14-blocked
 rm -f /tmp/claudux-manifest-t15-output /tmp/claudux-manifest-t16-output /tmp/claudux-manifest-t18-output
+rm -f /tmp/claudux-manifest-t18b /tmp/claudux-manifest-t18b-output
 rm -f /tmp/claudux-manifest-t19 /tmp/claudux-manifest-t19-output /tmp/claudux-manifest-t20 /tmp/claudux-manifest-t20-output
 rm -f /tmp/claudux-manifest-t21 /tmp/claudux-manifest-t21-output
 rm -f /tmp/claudux-manifest-t22-schema /tmp/claudux-manifest-t22-schema-output /tmp/claudux-manifest-t22-disk /tmp/claudux-manifest-t22-disk-output
@@ -892,6 +973,6 @@ rm -f /tmp/claudux-manifest-t25 /tmp/claudux-manifest-t25-output
 rm -f /tmp/claudux-manifest-t26 /tmp/claudux-manifest-t26-output
 rm -f /tmp/claudux-manifest-t27 /tmp/claudux-manifest-t27-output
 rm -f /tmp/claudux-section-patches-t11.json /tmp/claudux-section-patches-t12.json /tmp/claudux-section-patches-t14-allowed.json /tmp/claudux-section-patches-t14-blocked.json
-rm -f /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
+rm -f /tmp/claudux-section-patches-t5c.json /tmp/claudux-section-patches-t15.json /tmp/claudux-section-patches-t16.json
 
 test_summary

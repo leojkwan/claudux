@@ -314,6 +314,24 @@ assert_contains "status shows commits behind" "$result15" "commit(s) behind HEAD
 assert_contains "status suggests claudux diff" "$result15" "claudux diff"
 rm -rf "$TEST_DIR"
 
+# --- Test 15c: claudux status reports dirty docs when checkpoint is otherwise fresh ---
+TEST_DIR=$(setup_repo)
+(
+    cd "$TEST_DIR"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    source "$LIB_DIR/docs-generation.sh"
+    STATE_FILE="$TEST_DIR/.claudux-state.json"
+    save_claudux_state
+
+    echo "dirty docs body" >> docs/index.md
+
+    bash "$REPO_ROOT/bin/claudux" status 2>&1
+) > /tmp/claudux-integ-t15c 2>&1
+result15c=$(cat /tmp/claudux-integ-t15c)
+assert_contains "status reports dirty docs" "$result15c" "uncommitted documentation/config change(s)"
+assert_contains "dirty status suggests claudux diff" "$result15c" "claudux diff"
+rm -rf "$TEST_DIR"
+
 # --- Test 15b: claudux status with corrupt state file produces a useful message ---
 TEST_DIR=$(setup_repo)
 (
@@ -422,6 +440,6 @@ assert_eq "deleted file removed from state on re-save" "1|0" "$(cat /tmp/claudux
 rm -rf "$TEST_DIR"
 
 # Cleanup
-rm -f /tmp/claudux-integ-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21}
+rm -f /tmp/claudux-integ-t{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,15c,16,17,18,19,20,21}
 
 test_summary

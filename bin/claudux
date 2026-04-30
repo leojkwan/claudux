@@ -261,9 +261,12 @@ main() {
     # Only validate dependencies for commands that need the LLM backend.
     # Unknown commands skip validation and fall through to the error handler.
     case "${1:-}" in
-        "update"|"recreate"|"template"|""|"serve"|"server"|"dev")
+        "update"|"template"|""|"serve"|"server"|"dev")
             validate_dependencies
             # Acquire lock for commands that modify files
+            acquire_lock
+            ;;
+        "recreate")
             acquire_lock
             ;;
     esac
@@ -332,10 +335,8 @@ main() {
             ;;
         "recreate")
             check_function "show_header"
-            check_function "check_generation_backend"
             check_function "recreate_docs"
             show_header
-            check_generation_backend
             shift
             recreate_docs "$@"
             ;;
