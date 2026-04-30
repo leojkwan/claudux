@@ -77,13 +77,13 @@ Backend controls stay explicit in patch mode: Claude is limited to `Read`, and C
 
 The static index is deterministic cache state written to `.claudux/index/static-analysis.json` by default. `CLAUDUX_INDEX_DIR` or `CLAUDUX_STATIC_INDEX_FILE` can relocate it, and prompt construction always reads the resolved path.
 
-`build_static_analysis_index()` rebuilds it from tracked files on every run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `.claudux/` and `node_modules/` becomes a source entry.
+`build_static_analysis_index()` rebuilds it from tracked files on every deterministic run. Every tracked markdown file under `docs/` becomes a docs entry. Every tracked non-doc file outside `docs/`, `.claudux/`, and nested `node_modules/` paths becomes a source entry.
 
 ### Recorded facts
 
 Each run records stable facts rather than prose:
 
-- `head_sha`.
+- `head_sha` from the current git checkout.
 - Manifest path, digest, page count, and source-owned page count when a resolved manifest exists.
 - `package.json` scripts.
 - CLI command tokens parsed from Bash `case` labels in `bin/claudux`.
@@ -98,15 +98,15 @@ Each run records stable facts rather than prose:
 
 ### Current claudux snapshot
 
-On the latest dogfood cache build for this refresh, the authoritative snapshot at `HEAD cb2e768568ccbcb77a452593c78d2d1d1c37b671` records 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
+For this dogfood refresh, the authoritative index summary reports 75 source files, 15 documentation files, 10 tracked test files, 34 dependency edges, 10 protected content blocks, and a 15-page manifest with 15 source-owned pages.
 
-The manifest entry points at `docs-structure.json` with SHA-256 `0c066dfcdf27dcbef2cd805b29c4a71b52ccae21cc5b7bd42b51ff4f35711353`.
+The manifest remains `docs-structure.json`; commit-scoped values such as the active `HEAD` and manifest digest stay in the JSON index and checkpoint metadata instead of being repeated as long-lived prose on this page.
 
 For claudux itself, the current script inventory is `lint`, `test`, `test:all`, and `test:ci`.
 
 The current CLI token inventory is `--`, `--check`, `--help`, `--message`, `--strict`, `--version`, `--with`, `-V`, `-h`, `-m`, `check`, `dev`, `diff`, `help`, `recreate`, `serve`, `server`, `status`, `template`, `update`, `validate`, and `version`. That list is intentionally broader than the public subcommand menu because `cliCommandsFromBin()` scans raw `case` labels and option-parser tokens, not just the canonical commands a human doc page would foreground.
 
-The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with counts, sorted script and command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
+The model does not receive the full JSON blob. `format_static_analysis_index_context()` projects it into a compact prompt summary with the resolved index path, current `HEAD`, counts, sorted script and command lists, source-owned page mappings, and the manifest preservation rule before any model output is accepted.
 
 The cache is intentionally reproducible. `static-analysis.json`, `docs-guard-snapshot.json`, and `impacted-docs.json` omit wall-clock timestamps, so identical repo state produces byte-stable deterministic artifacts.
 
