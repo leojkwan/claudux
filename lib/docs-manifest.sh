@@ -1454,7 +1454,7 @@ if (process.env.CLAUDUX_CHECK_MODE === '1') {
     !state.originalBytes ||
     !Buffer.from(`${state.lines.join('\n').trimEnd()}\n`).equals(state.originalBytes));
   if (driftFiles.length === 0) {
-    console.log('[claudux:check] no drift: documentation matches sources');
+    console.log('[claudux:check] no drift in proposed patches; source coverage is not established');
     process.exit(0);
   }
   console.log(`[claudux:check] drift detected: ${driftFiles.length} file(s) would change`);

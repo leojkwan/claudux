@@ -290,9 +290,20 @@ check_exit_block=$(sed -n '/^            if \$check_mode; then$/,/^            f
 assert_contains "update() check mode returns before link validation" \
     "$check_exit_block" \
     'return 0'
-assert_contains "update() check mode success line names the clean state" \
-    "$check_exit_block" \
-    'No docs drift: documentation matches sources'
+check_success_output=$(
+    run_check_result() {
+        local check_mode=true patch_apply_rc=0
+        success() { printf '%s\n' "$*"; }
+        eval "$check_exit_block"
+    }
+    run_check_result
+)
+assert_not_contains "update() success cannot establish source coverage" \
+    "$check_success_output" \
+    'documentation matches sources'
+assert_contains "update() success describes only the proposed update" \
+    "$check_success_output" \
+    'No proposed documentation changes'
 
 # Cleanup
 test_summary

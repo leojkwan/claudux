@@ -1495,7 +1495,7 @@ $base_prompt"
                 elif [[ $patch_apply_rc -ne 0 ]]; then
                     error_exit "Section patch validation failed during --check"
                 fi
-                success "No docs drift: documentation matches sources"
+                success "No proposed documentation changes; source coverage is not established"
                 echo ""
                 return 0
             fi

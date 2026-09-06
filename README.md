@@ -107,24 +107,23 @@ This block is hash-guarded by claudux.
 Language-specific marker pairs include `// skip`, `# skip`, `/* skip */`, and
 `-- skip`.
 
-## CI docs-drift gate
+## Check a proposed update in CI
 
 With a committed `docs-structure.json`, `claudux update --check` runs the
 backend read-only and compares its proposed section patches against the docs
-on disk, writing nothing. Exit codes: `0` when docs match sources, `2` when
-drift is detected (the drifting files are listed), `1` on a validation or
-backend error. Wire it into CI so a pull request fails when its docs fall
-behind its code:
+on disk, writing nothing. Exit codes: `0` when the proposal changes no files,
+`2` when the proposal would change files (those files are listed), and `1` on
+a validation or backend error. Use it in CI to surface proposed docs changes:
 
 ```yaml
 - run: claudux update --check
 ```
 
-The gate proposes through the same model that `claudux update` uses, so a
-drift verdict reflects what an update would change rather than a text diff;
-a no-op proposal exits `0`. Because the proposal is model-generated, treat
-the gate as a boundary-enforced reviewer: a false positive costs one re-run,
-a false negative costs nothing the next update would not also miss.
+The proposal comes from the same model that `claudux update` uses. An unchanged
+proposal exits `0` even when the model missed an undocumented source change.
+This checks proposed edits; it does not establish that the docs are accurate
+or cover the source. Keep human review and any API-specific documentation
+checks you already use.
 
 After generation, claudux checks VitePress routes, Markdown links, local
 assets, anchors, traversal, and symlink escapes. External URLs are skipped.
