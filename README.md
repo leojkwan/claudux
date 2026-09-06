@@ -1,14 +1,16 @@
 # Claudux
 
-**Update your docs when your code changes. Keep the parts you wrote.**
+**Regenerate your docs from the code, without losing the paragraphs you wrote by hand.**
 
-Claudux uses your authenticated Claude CLI or Codex CLI to draft and update a
-VitePress documentation site. Commit a manifest to choose which sections it
-may change and which it must leave alone.
+I kept a VitePress site for a project and let Claude rewrite it whenever the
+code moved. It was fast and it kept stomping the two pages I'd actually
+written with care. Claudux is the wrapper I built to stop that. It runs your
+own Claude CLI or Codex CLI (no API key, no hosted service), asks it for
+patches, and applies them only where a committed manifest says it may.
 
-[Get started](#quick-start) · [See a real update](#one-real-bounded-update) ·
-[Read the docs](https://firstbitelabsllc.github.io/claudux/) ·
-[Report a problem](https://github.com/firstbitelabsllc/claudux/issues)
+[Quick start](#quick-start) · [A real update](#one-real-bounded-update) ·
+[Docs](https://firstbitelabsllc.github.io/claudux/) ·
+[Issues](https://github.com/firstbitelabsllc/claudux/issues)
 
 <p align="center">
   <a href="https://github.com/firstbitelabsllc/claudux/actions/workflows/ci.yml"><img src="https://github.com/firstbitelabsllc/claudux/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -17,11 +19,13 @@ may change and which it must leave alone.
   <img src="https://img.shields.io/badge/node-%E2%89%A518-5fa04e?style=flat" alt="Node ≥ 18" />
 </p>
 
-For an existing docs site, `docs-structure.json` names the pages, writable
-sections, and protected text. The backend proposes patches; Claudux checks
-the whole batch before applying it. Without a manifest, the first run has
-broader write access and restores unrelated source if it changes. Read the
-[safety model](#safety-model) before running it on work you want to keep.
+The manifest is a `docs-structure.json` in your repo. It lists the pages, the
+sections the model may rewrite, and the text it must leave alone. The model
+never gets file access in that mode; it returns patch JSON and Claudux checks
+the whole batch, including hashes of the protected blocks, before writing
+anything. Without a manifest the first run is broader, and Claudux restores
+any source file it touches outside the docs. Read [the safety model](#safety-model)
+before pointing it at work you care about.
 
 <p align="center">
   <img src="assets/claudux-rails.svg" alt="How manifest mode applies a section-patch batch: the repository declares writable sections, the backend returns patch JSON without direct file access, and claudux validates every target, boundary, impact rule, and protected hash before transactionally committing the target documentation files." width="820" />
@@ -29,64 +33,55 @@ broader write access and restores unrelated source if it changes. Read the
 
 ## Quick start
 
-Requirements: Node 18+ and an authenticated Claude CLI (default) or Codex CLI
-on the machine. There is no hosted API-key path.
+Node 18+ and a Claude CLI (default) or Codex CLI you're already logged into.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/firstbitelabsllc/claudux/main/install.sh | sh
 cd your-project
-claudux check    # verify Node and backend authentication
-claudux update   # generate or update docs
+claudux check    # Node, backend login, docs state
+claudux update   # generate or update the docs
 claudux serve    # preview at http://localhost:5173
 ```
 
-Those five commands are the setup; model generation can take longer depending
-on the repository and backend. Inspect `git diff` before committing the docs.
-Generation uses your existing provider allowance and can incur its usual
-usage costs. `claudux check` verifies setup without generating documentation.
+`update` is the only command that spends model usage, and it spends yours.
+Look at `git diff` before you commit what it wrote.
 
-The installer clones GitHub into `~/.local/share/claudux` and symlinks the CLI
-onto your PATH. It tracks `main` by default. Pin the current release with:
+The installer clones into `~/.local/share/claudux` and symlinks the CLI onto
+your PATH, tracking `main`. To pin a release instead:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/firstbitelabsllc/claudux/v2.0.7/install.sh \
   | CLAUDUX_REF=v2.0.7 sh
 ```
 
-A missing ref fails instead of silently falling back to `main`. For one run
-without installing, use `npx github:firstbitelabsllc/claudux update`. Run
-`claudux` with no arguments for the interactive menu.
+A bad ref fails loudly instead of falling back to `main`. For a one-off,
+`npx github:firstbitelabsllc/claudux update` works without installing.
 
 <p align="center">
   <img src="assets/claudux-terminal-demo.svg" alt="A real claudux session: claudux update detects the project type, generates VitePress docs with Claude, and validates links; claudux serve previews them at localhost:5173" width="780" />
 </p>
 
-Reconstructed from a real run against a two-file Node CLI: project detection,
-generation, link validation, and the VitePress preview.
-
 ## One real bounded update
 
-In a disposable Node package, the initial API page documented `addCents` and
-`formatUsd`. The source and tests then added `allocateCents(total, parts)`.
-With a committed manifest, this command ran the backend read-only:
+Small Node package, docs already covering `addCents` and `formatUsd`. I added
+`allocateCents(total, parts)` with tests, committed a manifest that pinned
+the guide's quick-start section, and ran:
 
 ```bash
 claudux update -m "Document the new allocateCents API from its source and tests."
 ```
 
-Before the run, the API page had no `allocateCents` entry and the guide's
-quick-start section was pinned. After the run, the API page contained the new
-signature, examples, and error behavior; the pinned guide remained
-byte-identical:
+After: the API page had the new signature, examples, and error behavior. The
+pinned guide was byte-identical. Only one file changed:
 
 ```text
 $ git diff --name-only HEAD^
 docs/api/index.md
 ```
 
-The [full lifecycle receipt](evidence/real-target-lifecycle.md) records the
-install commit, manifest hashes, rejected unrelated-source mutation, docs
-build, link check, dependency audit, and browser result.
+The [full receipt](evidence/real-target-lifecycle.md) has the install commit,
+manifest hashes, the rejected out-of-bounds write, the docs build, the link
+check, and the browser result.
 
 ## Safety model
 
