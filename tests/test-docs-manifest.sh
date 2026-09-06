@@ -1148,11 +1148,12 @@ assert_contains "check mode leaves old body on disk" "$(cat "$TEST_TMP_ROOT/clau
 assert_not_contains "check mode never writes the new body" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28")" "New generated body that differs from disk."
 rm -rf "$TEST_DIR"
 
-# --- Test 28b: check mode exits 0 when docs match sources ---
+# --- Test 28b: an unchanged proposal cannot establish source coverage ---
 TEST_DIR=$(setup_manifest_repo)
 (
     cd "$TEST_DIR"
     source "$LIB_DIR/docs-manifest.sh"
+    printf '\nnew_public_command() { echo undocumented; }\n' >> lib/docs-manifest.sh
     printf '%s\n' \
         '{' \
         '  "patches": [' \
@@ -1170,6 +1171,7 @@ TEST_DIR=$(setup_manifest_repo)
 ) > "$TEST_TMP_ROOT/claudux-manifest-t28b" 2>&1
 assert_contains "check mode exits 0 when clean" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28b")" "rc=0"
 assert_contains "check mode reports no drift" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28b")" "no drift"
+assert_not_contains "unchanged proposal cannot claim source coverage" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28b")" "documentation matches sources"
 rm -rf "$TEST_DIR"
 
 # --- Test 28c: check mode still fails hard on pinned violations ---
