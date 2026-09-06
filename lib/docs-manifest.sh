@@ -1420,18 +1420,21 @@ if (errors.length === 0) {
     }
 
     const replacement = [state.lines[span.start]];
-    const body = operation.body;
+    // Collapse runs of blank lines inside the patch body only. A whole-file
+    // collapse rewrote bytes in pinned sections and fenced blocks the patch
+    // never targeted, which tripped the guard after the write and reported
+    // drift in --check for an identical proposal.
+    const body = operation.body.replace(/\n{3,}/g, '\n\n');
     if (body.length > 0) {
       replacement.push('', ...body.split('\n'));
     }
     replacement.push('');
 
-    const next = [
+    state.lines = [
       ...state.lines.slice(0, span.start),
       ...replacement,
       ...state.lines.slice(span.end),
     ];
-    state.lines = next.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd().split('\n');
     state.changed = true;
     applied.push(`${operation.page_id}#${operation.section_id}`);
   }

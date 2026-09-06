@@ -198,9 +198,8 @@ Supported marker styles include:
 - `-- skip` for SQL
 
 Skip markers are literal, line-based boundaries. Their mechanical
-preservation guarantee belongs to manifest mode; the standalone
-`strip_protected_content()` utility is not a pre-prompt filter in the update
-path.
+preservation guarantee belongs to manifest mode; the update path does not
+strip protected content before prompting.
 
 ## VitePress Behavior
 
