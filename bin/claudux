@@ -115,20 +115,20 @@ case "${1:-}" in
         ;;
 esac
 
-# Check if we're in a git repository and auto-cd to project root
-if [[ "$CLAUDUX_SKIP_GIT_GATE" != "true" ]]; then
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        echo "⚠️  No git repository found. Are you in the right directory?"
-        echo "   Run claudux from your project root (where .git lives)"
-        exit 1
-    fi
-
-    # Auto-cd to git root if we're in a subdirectory
+# Commands that change files need a git repository. Informational commands
+# answer from anywhere, but inside a repository every command answers for
+# the project root, so `claudux check` run from docs/ reports the root's
+# docs/ state and project type rather than the subdirectory's.
+if git rev-parse --git-dir > /dev/null 2>&1; then
     PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-    if [[ "$PWD" != "$PROJECT_ROOT" ]]; then
+    if [[ -n "$PROJECT_ROOT" && "$PWD" != "$PROJECT_ROOT" ]]; then
         echo "📍 Changing to project root: $PROJECT_ROOT" >&2
         cd "$PROJECT_ROOT" || exit 1
     fi
+elif [[ "$CLAUDUX_SKIP_GIT_GATE" != "true" ]]; then
+    echo "⚠️  No git repository found. Are you in the right directory?"
+    echo "   Run claudux from your project root (where .git lives)"
+    exit 1
 fi
 
 # Determine lib directory location

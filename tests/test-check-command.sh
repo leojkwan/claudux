@@ -63,6 +63,23 @@ rm -f "$STUB_DIR/claudux.json"
 output=$(cd "$STUB_DIR" && PATH="$STUB_DIR:/usr/bin:/bin" bash "$REPO_ROOT/bin/claudux" check 2>&1)
 assert_contains "check falls back to sonnet with no config" "$output" "Model: sonnet"
 
+# ── Run from a subdirectory → reports the project root's state ───────
+# `check` skips the "must be a git repo" gate so it answers from anywhere,
+# but inside a repo it must still answer for the project root: run from
+# docs/ it used to report "docs/: not present" and detect the wrong type.
+SUBDIR_REPO="$TEST_TMP_ROOT/subdir-repo"
+mkdir -p "$SUBDIR_REPO/docs/guide"
+(
+    cd "$SUBDIR_REPO" || exit 1
+    git init -q
+    printf '{"name":"root-package"}\n' > package.json
+)
+output=$(cd "$SUBDIR_REPO/docs/guide" && PATH="$STUB_DIR:/usr/bin:/bin" bash "$REPO_ROOT/bin/claudux" check 2>&1)
+rc=$?
+assert_exit_code "check from a subdirectory passes" 0 "$rc"
+assert_contains "check from a subdirectory reports the root docs/ dir" "$output" "docs/: present"
+assert_contains "check from a subdirectory detects the root project type" "$output" "Detected project type: javascript"
+
 # ── Backend CLI unauthenticated → exit 1 ─────────────────────────────
 output=$(cd "$STUB_DIR" && PATH="$STUB_DIR:/usr/bin:/bin" CLAUDE_STUB_AUTH=unauthenticated bash "$REPO_ROOT/bin/claudux" check 2>&1)
 rc=$?
