@@ -180,8 +180,6 @@ The deterministic path uses those boundaries in two enforced places:
 - `build_static_analysis_index()` records protected blocks across tracked project files with marker text, line spans, and hashes.
 - The guard snapshot captures recorded protected blocks and later rejects runs that remove a block or change a recorded block hash.
 
-`strip_protected_content()` is still shipped as a utility helper and is covered by `tests/test-content-protection.sh`, but the manifest pipeline preservation guarantee comes from indexed block facts plus guard validation, not from a pre-prompt stripping pass.
-
 Protected-block preservation is not limited to markdown docs. Any tracked file with a recognized marker pair can participate in the guard, which keeps protected code snippets, fixture notes, and top-level project files stable during deterministic runs.
 
 ## Dependency-Aware Scope
