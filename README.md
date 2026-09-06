@@ -1,12 +1,26 @@
 # Claudux
 
-**Regenerate your docs from the code, without losing the paragraphs you wrote by hand.**
+**Regenerate your docs from the code. The paragraphs you wrote by hand stay byte-identical.**
 
-I kept a VitePress site for a project and let Claude rewrite it whenever the
-code moved. It was fast and it kept stomping the two pages I'd actually
-written with care. Claudux is the wrapper I built to stop that. It runs your
-own Claude CLI or Codex CLI (no API key, no hosted service), asks it for
-patches, and applies them only where a committed manifest says it may.
+What a run checks before it spends anything, on this repo:
+
+```console
+$ claudux check
+• Node: v26.8.1
+• Backend: claude
+• Claude CLI: 2.1.263 (Claude Code)
+• Model: fable
+🔐 Checking Claude CLI authentication...
+📁 Detected project type: javascript
+• docs/: present
+
+✅ Environment check passed
+```
+
+I let Claude rewrite a VitePress site whenever the code moved, and it kept
+stomping the two pages I'd written by hand. Claudux is the wrapper I built to
+stop that. It runs your own Claude CLI or Codex CLI (no API key, no hosted
+service) and applies its patches only where a committed manifest allows.
 
 [Quick start](#quick-start) · [A real update](#one-real-bounded-update) ·
 [Docs](https://firstbitelabsllc.github.io/claudux/) ·
@@ -19,13 +33,26 @@ patches, and applies them only where a committed manifest says it may.
   <img src="https://img.shields.io/badge/node-%E2%89%A518-5fa04e?style=flat" alt="Node ≥ 18" />
 </p>
 
-The manifest is a `docs-structure.json` in your repo. It lists the pages, the
-sections the model may rewrite, and the text it must leave alone. The model
-never gets file access in that mode; it returns patch JSON and Claudux checks
-the whole batch, including hashes of the protected blocks, before writing
-anything. Without a manifest the first run is broader, and Claudux restores
-any source file it touches outside the docs. Read [the safety model](#safety-model)
-before pointing it at work you care about.
+## What a run may touch
+
+`docs-structure.json`, committed in your repo. One page from this repo's
+own, trimmed:
+
+```json
+{
+  "path": "docs/technical/deterministic-generation.md",
+  "sections": [
+    { "id": "pipeline", "heading": "Pipeline", "pinned": true },
+    { "id": "validators", "heading": "Validators",
+      "source_patterns": ["lib/docs-manifest.sh"] }
+  ]
+}
+```
+
+- **pinned**: hash-checked. A patch that touches it is rejected.
+- **source_patterns**: the files allowed to change this section.
+- **patch**: the model gets no file access. It returns patch JSON; Claudux
+  checks the whole batch, then writes.
 
 <p align="center">
   <img src="assets/claudux-rails.svg" alt="How manifest mode applies a section-patch batch: the repository declares writable sections, the backend returns patch JSON without direct file access, and claudux validates every target, boundary, impact rule, and protected hash before transactionally committing the target documentation files." width="820" />
@@ -33,7 +60,7 @@ before pointing it at work you care about.
 
 ## Quick start
 
-Node 18+ and a Claude CLI (default) or Codex CLI you're already logged into.
+Node 18+ and a Claude CLI (default) or Codex CLI you're logged into.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/firstbitelabsllc/claudux/main/install.sh | sh
@@ -44,18 +71,8 @@ claudux serve    # preview at http://localhost:5173
 ```
 
 `update` is the only command that spends model usage, and it spends yours.
-Look at `git diff` before you commit what it wrote.
-
-The installer clones into `~/.local/share/claudux` and symlinks the CLI onto
-your PATH, tracking `main`. To pin a release instead:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/firstbitelabsllc/claudux/v2.0.7/install.sh \
-  | CLAUDUX_REF=v2.0.7 sh
-```
-
-A bad ref fails loudly instead of falling back to `main`. For a one-off,
-`npx github:firstbitelabsllc/claudux update` works without installing.
+Read `git diff` before you commit. `CLAUDUX_REF=v2.0.7` on the install line
+pins a release; a bad ref fails instead of falling back to `main`.
 
 <p align="center">
   <img src="assets/claudux-terminal-demo.svg" alt="A real claudux session: claudux update detects the project type, generates VitePress docs with Claude, and validates links; claudux serve previews them at localhost:5173" width="780" />
@@ -63,72 +80,36 @@ A bad ref fails loudly instead of falling back to `main`. For a one-off,
 
 ## One real bounded update
 
-Small Node package, docs already covering `addCents` and `formatUsd`. I added
-`allocateCents(total, parts)` with tests, committed a manifest that pinned
-the guide's quick-start section, and ran:
+I added `allocateCents(total, parts)` to a small package, pinned the guide's
+quick-start section, and ran:
 
 ```bash
 claudux update -m "Document the new allocateCents API from its source and tests."
 ```
-
-After: the API page had the new signature, examples, and error behavior. The
-pinned guide was byte-identical. Only one file changed:
 
 ```text
 $ git diff --name-only HEAD^
 docs/api/index.md
 ```
 
-The [full receipt](evidence/real-target-lifecycle.md) has the install commit,
-manifest hashes, the rejected out-of-bounds write, the docs build, the link
-check, and the browser result.
+The pinned guide was byte-identical. [Full receipt](evidence/real-target-lifecycle.md):
+manifest hashes, the rejected out-of-bounds write, docs build, browser result.
 
 ## Safety model
 
-| Mode | Backend access | Mechanical boundary | On failure |
-| --- | --- | --- | --- |
-| First run / no manifest | May write documentation paths directly | claudux rejects new worktree, index, or commit mutations outside documentation, local state, and manifest paths | Restores unrelated source and `HEAD`; leaves the docs diff for review |
-| Committed `docs-structure.json` | Read-only | Page IDs, source ownership, writable sections, deletion rules, impact limits, and protected hashes | Rejects the whole patch batch or restores every target file |
+| Mode | Backend access | On failure |
+| --- | --- | --- |
+| No manifest | Writes docs paths directly; any change outside docs, local state, and manifest paths is rejected | Restores unrelated source and `HEAD`; leaves the docs diff for review |
+| Committed `docs-structure.json` | Read-only; patches checked against page IDs, writable sections, source ownership, deletion rules, protected hashes | Rejects the whole batch or restores every target file |
 
-Manifest mode also hash-guards pinned sections, explicit read-only sections,
-and skip-marker blocks:
+Skip-marker blocks (`<!-- skip -->` … `<!-- /skip -->`, `// skip`, `# skip`,
+`/* skip */`, `-- skip`) are hash-guarded too. After a run, Claudux checks
+routes, links, assets, anchors, and symlink escapes; `--strict` fails on
+unresolved links. Model output can still be wrong; review the diff.
 
-```markdown
-<!-- skip -->
-This block is hash-guarded by claudux.
-<!-- /skip -->
-```
-
-Language-specific marker pairs include `// skip`, `# skip`, `/* skip */`, and
-`-- skip`.
-
-## Check a proposed update in CI
-
-With a committed `docs-structure.json`, `claudux update --check` runs the
-backend read-only and compares its proposed section patches against the docs
-on disk, writing nothing. Exit codes: `0` when the proposal changes no files,
-`2` when the proposal would change files (those files are listed), and `1` on
-a validation or backend error. Use it in CI to surface proposed docs changes:
-
-```yaml
-- run: claudux update --check
-```
-
-The proposal comes from the same model that `claudux update` uses. An unchanged
-proposal exits `0` even when the model missed an undocumented source change.
-This checks proposed edits; it does not establish that the docs are accurate
-or cover the source. Keep human review and any API-specific documentation
-checks you already use.
-
-After generation, claudux checks VitePress routes, Markdown links, local
-assets, anchors, traversal, and symlink escapes. External URLs are skipped.
-Unresolved links warn by default; `--strict` fails the update.
-
-`claudux update -m "document the new auth flow"` focuses a run on one area.
-Model output can still be wrong, so the generated diff remains the review
-surface. `serve` never invokes a model, though it may scaffold VitePress files
-and run `npm install`. `check` never generates docs, but it does verify the
-selected backend's authentication.
+In CI, `claudux update --check` runs the backend read-only and writes
+nothing: exit `0` when no file would change, `2` when files would, `1` on
+error. An unchanged proposal does not prove the docs are complete.
 
 ## Command and configuration reference
 
