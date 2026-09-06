@@ -1198,4 +1198,54 @@ assert_contains "check mode rejects pinned edits with error rc" "$(cat "$TEST_TM
 assert_contains "check mode rejects pinned edits" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28c")" "is pinned/read-only"
 rm -rf "$TEST_DIR"
 
+# --- Test 28d: a section patch never rewrites bytes outside its own section ---
+# The pinned section holds a fenced block with two consecutive blank lines.
+# An identical proposal must report no drift, and a real patch to the
+# generated section must leave the pinned section byte-identical.
+TEST_DIR=$(setup_manifest_repo)
+(
+    cd "$TEST_DIR"
+    source "$LIB_DIR/docs-manifest.sh"
+    printf '# Deterministic Generation\n\n## Pipeline\n\n```text\nline one\n\n\nline four\n```\n\n## Pinned Harness Example\n\nBody.\n\n## Generated Details\n\nOld generated body.\n\n## Unrelated Generated\n\nUnrelated body.\n' > docs/technical/deterministic-generation.md
+    git add docs/technical/deterministic-generation.md
+    git -c user.email=t@t -c user.name=T commit -q -m "pinned fence with blank lines"
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "Old generated body."' \
+        '    }' \
+        '  ]' \
+        '}' > "$TEST_TMP_ROOT/claudux-section-patches-t28d-same.json"
+    rc=0
+    CLAUDUX_CHECK_MODE=1 apply_manifest_section_patches "$TEST_TMP_ROOT/claudux-section-patches-t28d-same.json" >"$TEST_TMP_ROOT/claudux-manifest-t28d-check" 2>&1 || rc=$?
+    echo "check rc=$rc"
+    cat "$TEST_TMP_ROOT/claudux-manifest-t28d-check"
+
+    capture_docs_structure_guard_snapshot >/dev/null
+    printf '%s\n' \
+        '{' \
+        '  "patches": [' \
+        '    {' \
+        '      "page_id": "technical.deterministic-generation",' \
+        '      "section_id": "generated-details",' \
+        '      "body_markdown": "New generated body."' \
+        '    }' \
+        '  ]' \
+        '}' > "$TEST_TMP_ROOT/claudux-section-patches-t28d-new.json"
+    apply_manifest_section_patches "$TEST_TMP_ROOT/claudux-section-patches-t28d-new.json" >/dev/null 2>&1
+    rc=0
+    validate_docs_structure_guard_snapshot >"$TEST_TMP_ROOT/claudux-manifest-t28d-guard" 2>&1 || rc=$?
+    echo "guard rc=$rc"
+    cat "$TEST_TMP_ROOT/claudux-manifest-t28d-guard"
+    echo "-- numstat --"
+    git diff --numstat -- docs/technical/deterministic-generation.md | cut -f1,2
+) > "$TEST_TMP_ROOT/claudux-manifest-t28d" 2>&1
+assert_contains "identical proposal reports no drift despite blank lines elsewhere" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28d")" "check rc=0"
+assert_contains "pinned fence survives a patch to another section" "$(cat "$TEST_TMP_ROOT/claudux-manifest-t28d")" "guard rc=0"
+assert_eq "only the generated section changed (one line in, one line out)" $'1\t1' "$(sed -n '/-- numstat --/,$p' "$TEST_TMP_ROOT/claudux-manifest-t28d" | tail -n +2)"
+rm -rf "$TEST_DIR"
+
 test_summary
