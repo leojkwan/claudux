@@ -1538,10 +1538,12 @@ $base_prompt"
         # Validate links in generated documentation
         info "🔍 Step 3: Validating documentation links..."
         if [[ -f "$LIB_DIR/validate-links.sh" ]]; then
-            set +e
-            "$LIB_DIR/validate-links.sh"
-            VALIDATE_EXIT=$?
-            set -e
+            # No errexit toggling here: bin/claudux never enables -e, and
+            # turning it on leaked into the auto-fix second pass, where a
+            # failing backend exited the process before the failure report
+            # and the source-boundary rollback could run.
+            VALIDATE_EXIT=0
+            "$LIB_DIR/validate-links.sh" || VALIDATE_EXIT=$?
             echo ""
             if [[ $VALIDATE_EXIT -ne 0 ]]; then
                 warn "⚠️  Link validation found issues. Some documentation links may be broken."
