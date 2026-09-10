@@ -14,7 +14,6 @@ export default defineConfig({
   ],
   
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: `${base}claudux-icon.png` }],
     ['meta', { name: 'theme-color', content: '#f4f2eb' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'en' }],
@@ -34,7 +33,6 @@ export default defineConfig({
 
   themeConfig: {
     siteTitle: 'Claudux',
-    logo: '/claudux-icon.png',
 
     nav: [
       { text: 'Guide', link: '/guide/', activeMatch: '/guide/' },
