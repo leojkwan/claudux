@@ -2,11 +2,14 @@
 
 # Claudux
 
-**Update the docs. Keep the words you pinned.**
+**Update the docs. Keep your words.**
 
-Claudux uses your Claude Code or Codex CLI to turn code changes into VitePress
-documentation. Commit a manifest to choose which sections may change and which
-must stay byte-for-byte intact. Review the resulting diff before you commit.
+Turn code changes into documentation with Claude Code or Codex. Pin the
+sections you wrote. Review what changed.
+
+Claudux builds VitePress documentation using the CLI you are logged into.
+Commit a manifest to choose which sections may change and which must stay
+byte-for-byte intact. Review the resulting diff before you commit.
 
 [Try the local demo](#try-it-without-a-model-call) ·
 [Read the guide](https://firstbitelabsllc.github.io/claudux/) ·
