@@ -41,6 +41,15 @@ run_validator "$REPO_ROOT" "$FIXTURE_ROOT/current-repo-broken-targets.txt"
 assert_exit_code "current repository links pass" 0 "$VALIDATION_RC"
 assert_contains "current repository reports success" "$VALIDATION_OUTPUT" "All internal links validated successfully"
 
+# Extensionless repository files such as LICENSE are not Markdown routes.
+LICENSE_FIXTURE="$FIXTURE_ROOT/license"
+create_config "$LICENSE_FIXTURE" "      { text: 'Home', link: '/' }"
+printf '# Home\n' > "$LICENSE_FIXTURE/docs/index.md"
+printf '# Project\n\n[License](LICENSE)\n' > "$LICENSE_FIXTURE/README.md"
+printf 'MIT License\n' > "$LICENSE_FIXTURE/LICENSE"
+run_validator "$LICENSE_FIXTURE" "$LICENSE_FIXTURE/broken-targets.txt"
+assert_exit_code "extensionless repository file passes" 0 "$VALIDATION_RC"
+
 # Valid config routes, Markdown routes, assets, generated anchors, explicit
 # anchors, repeated VitePress slugs, and reference links.
 VALID_FIXTURE="$FIXTURE_ROOT/valid"

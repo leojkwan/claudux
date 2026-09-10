@@ -602,7 +602,8 @@ function resolveReference(reference, targetPath) {
             filePath = path.join(unresolved, 'index.md');
         } else if (extension === '.html' || extension === '.htm') {
             filePath = unresolved.slice(0, -extension.length) + '.md';
-        } else if (extension !== '.md') {
+        } else if (extension !== '.md' && !(!sourceIsDocumentation
+            && !extension && fs.existsSync(unresolved) && fs.statSync(unresolved).isFile())) {
             filePath = `${unresolved}.md`;
         }
     }
