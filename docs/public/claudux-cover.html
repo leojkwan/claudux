@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Claudux cover</title>
+  <style>
+    @font-face {
+      font-family: Space;
+      src: url(space-grotesk.ttf);
+      font-weight: 300 700;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      width: 1280px;
+      height: 640px;
+      margin: 0;
+      padding: 48px 64px;
+      background: #f4f2eb;
+      color: #322940;
+      font-family: Space, sans-serif;
+    }
+    .brand {
+      font-size: 26px;
+      font-weight: 600;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.65fr 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+    h1 {
+      font-size: 80px;
+      font-weight: 500;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 64px 0 24px;
+    }
+    p {
+      font-size: 24px;
+      line-height: 1.5;
+      color: #695d75;
+      margin: 0;
+    }
+    img {
+      width: 100%;
+    }
+    footer {
+      font-size: 16px;
+      color: #695d75;
+      margin-top: 48px;
+    }
+  </style>
+  <div class="brand">Claudux</div>
+  <div class="layout">
+    <div>
+      <h1>Update the docs.<br />Keep your words.</h1>
+      <p>Turn code changes into docs.<br />Preserve the sections you pin.</p>
+    </div>
+    <img src="claudux-icon.png" alt="Paper stack with a violet clip" />
+  </div>
+  <footer>Claude Code or Codex. A diff you can review.</footer>
+</html>

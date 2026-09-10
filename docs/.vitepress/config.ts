@@ -3,8 +3,9 @@ import { defineConfig } from 'vitepress'
 const base = process.env.DOCS_BASE || '/'
 
 export default defineConfig({
-  title: 'claudux',
-  description: 'Generate VitePress docs from your codebase via Claude or Codex, preview them locally, ship them.',
+  title: 'Claudux',
+  appearance: false,
+  description: 'Update documentation with Claude Code or Codex and preserve the sections you pin.',
   base,
   
   // Ignore localhost links during static builds
@@ -13,13 +14,14 @@ export default defineConfig({
   ],
   
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
-    ['meta', { name: 'theme-color', content: '#5f67ee' }],
+    ['meta', { name: 'theme-color', content: '#f4f2eb' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'en' }],
-    ['meta', { property: 'og:title', content: 'claudux — VitePress docs generated from your codebase' }],
-    ['meta', { property: 'og:site_name', content: 'claudux Docs' }],
-    ['meta', { property: 'og:url', content: '/' }],
+    ['meta', { property: 'og:title', content: 'Claudux — Update the docs. Keep your words.' }],
+    ['meta', { property: 'og:site_name', content: 'Claudux' }],
+    ['meta', { property: 'og:url', content: 'https://firstbitelabsllc.github.io/claudux/' }],
+    ['meta', { property: 'og:image', content: 'https://firstbitelabsllc.github.io/claudux/claudux-cover.png' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
 
   cleanUrls: true,
@@ -30,7 +32,7 @@ export default defineConfig({
   },
 
   themeConfig: {
-    siteTitle: 'claudux',
+    siteTitle: 'Claudux',
 
     nav: [
       { text: 'Guide', link: '/guide/', activeMatch: '/guide/' },
@@ -42,7 +44,7 @@ export default defineConfig({
     sidebar: {
       '/': [
         {
-          text: '🚀 Getting Started',
+          text: 'Getting Started',
           collapsed: false,
           items: [
             { text: 'Overview', link: '/guide/' },
@@ -52,7 +54,7 @@ export default defineConfig({
           ]
         },
         {
-          text: '✨ Features',
+          text: 'Features',
           collapsed: false,
           items: [
             { text: 'Overview', link: '/features/' },
@@ -62,7 +64,7 @@ export default defineConfig({
           ]
         },
         {
-          text: '🔧 Technical',
+          text: 'Technical',
           collapsed: true,
           items: [
             { text: 'Architecture', link: '/technical/' },
@@ -71,7 +73,7 @@ export default defineConfig({
           ]
         },
         {
-          text: '📚 Reference',
+          text: 'Reference',
           collapsed: true,
           items: [
             { text: 'API Reference', link: '/api/' },
@@ -81,7 +83,7 @@ export default defineConfig({
       ],
       '/guide/': [
         {
-          text: '🚀 Getting Started',
+          text: 'Getting Started',
           collapsed: false,
           items: [
             { text: 'Overview', link: '/guide/' },
@@ -93,7 +95,7 @@ export default defineConfig({
       ],
       '/features/': [
         {
-          text: '✨ Features',
+          text: 'Features',
           collapsed: false,
           items: [
             { text: 'Overview', link: '/features/' },
@@ -105,7 +107,7 @@ export default defineConfig({
       ],
       '/technical/': [
         {
-          text: '🔧 Technical',
+          text: 'Technical',
           collapsed: false,
           items: [
             { text: 'Architecture', link: '/technical/' },
@@ -121,7 +123,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Generated with claudux',
+      message: 'Open source. Review the diff.',
       copyright: 'Copyright © 2026 First Bite Labs'
     },
 

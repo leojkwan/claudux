@@ -1,271 +1,46 @@
-/**
- * Custom VitePress theme enhancements
- * Minimal overrides - let VitePress handle layout
- */
-
-/* Enhanced root variables */
+@font-face {
+  font-family: Space;
+  src: url("../../public/space-grotesk.ttf");
+  font-display: swap;
+  font-weight: 300 700;
+}
 :root {
-  /* Custom brand colors */
-  --vp-c-brand-1: #5f67ee;
-  --vp-c-brand-2: #4c52cc;
-  --vp-c-brand-3: #3940aa;
-  --vp-c-brand-soft: #e8e9ff;
-  
-  /* Custom font sizes for better hierarchy */
-  --vp-font-size-xl: 1.125rem;
-  --vp-font-size-2xl: 1.25rem;
-  
-  /* Enhanced shadows */
-  --vp-shadow-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  --vp-shadow-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --vp-shadow-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --vp-font-family-base: Space, sans-serif;
+  --vp-c-bg: #f4f2eb;
+  --vp-c-bg-alt: #ece7f0;
+  --vp-c-bg-soft: #ece7f0;
+  --vp-c-text-1: #322940;
+  --vp-c-text-2: #695d75;
+  --vp-c-text-3: #695d75;
+  --vp-c-brand-1: #72519c;
+  --vp-c-brand-2: #8762b2;
+  --vp-c-brand-3: #72519c;
+  --vp-c-brand-soft: #e8deef;
+  --vp-c-divider: #d0c5d9;
 }
-
-/* Dark mode enhancements */
-.dark {
-  --vp-c-brand-1: #7c83f0;
-  --vp-c-brand-2: #6b73ed;
-  --vp-c-brand-3: #5a63ea;
-  --vp-c-brand-soft: #1a1b2e;
+::selection {
+  background: #e0ceef;
+  color: #322940;
 }
-
-/* Enhanced sidebar styling - minimal tweaks only */
-.VPSidebar {
-  background: var(--vp-c-bg-soft);
+:focus-visible {
+  outline: 3px solid #8762b2;
+  outline-offset: 5px;
 }
-
-.VPSidebarItem .text {
-  font-weight: 500;
-  color: var(--vp-c-text-1);
-  transition: color 0.2s ease;
+.VPNavBarTitle .logo {
+  width: 36px;
+  height: 36px;
 }
-
-.VPSidebarItem.level-0 > .item > .link > .text {
-  font-weight: 600;
-  font-size: var(--vp-font-size-xl);
+.VPNavBarTitle .title {
+  gap: 8px;
 }
-
-.VPSidebarItem .link:hover .text {
-  color: var(--vp-c-brand-1);
+.vp-doc {
+  line-height: 1.75;
 }
-
-.VPSidebarItem.is-active > .item > .link .text {
-  color: var(--vp-c-brand-1);
-  font-weight: 600;
+.vp-doc a {
+  text-underline-offset: 4px;
 }
-
-/* Enhanced sidebar group styling */
-.VPSidebarGroup + .VPSidebarGroup {
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--vp-c-divider-light);
-}
-
-.VPSidebarGroup .title {
-  font-weight: 700;
-  font-size: var(--vp-font-size-xl);
-  color: var(--vp-c-text-1);
-  margin-bottom: 0.75rem;
-  padding: 0.5rem 0;
-}
-
-/* Enhanced navigation bar */
-.VPNav {
-  backdrop-filter: blur(12px);
-  box-shadow: var(--vp-shadow-1);
-}
-
-.VPNavBar .title {
-  font-weight: 700;
-  color: var(--vp-c-text-1);
-}
-
-.VPNavBarMenu .VPNavBarMenuLink {
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.VPNavBarMenu .VPNavBarMenuLink:hover {
-  color: var(--vp-c-brand-1);
-  background-color: var(--vp-c-brand-soft);
-}
-
-/* Enhanced search styling */
-.VPNavBarSearch .DocSearch-Button {
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  box-shadow: var(--vp-shadow-1);
-}
-
-.VPNavBarSearch .DocSearch-Button:hover {
-  border-color: var(--vp-c-brand-1);
-  box-shadow: var(--vp-shadow-2);
-}
-
-/* Enhanced code blocks */
-.vp-code-group {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--vp-shadow-2);
-  margin: 1.5rem 0;
-}
-
-div[class*="language-"] {
-  border-radius: 8px;
-  margin: 1.25rem 0;
-  overflow: hidden;
-  box-shadow: var(--vp-shadow-1);
-}
-
-/* Enhanced blockquotes */
-.vp-doc blockquote {
-  border-left: 4px solid var(--vp-c-brand-1);
-  border-radius: 0 8px 8px 0;
-  background: var(--vp-c-bg-soft);
-  margin: 1.5rem 0;
-  padding: 1rem 1.5rem;
-  box-shadow: var(--vp-shadow-1);
-}
-
-/* Enhanced custom containers */
-.custom-block {
-  border-radius: 8px;
-  margin: 1.5rem 0;
-  box-shadow: var(--vp-shadow-1);
-  overflow: hidden;
-}
-
-.custom-block.tip {
-  border-left: 4px solid var(--vp-c-tip-1);
-}
-
-.custom-block.warning {
-  border-left: 4px solid var(--vp-c-warning-1);
-}
-
-.custom-block.danger {
-  border-left: 4px solid var(--vp-c-danger-1);
-}
-
-/* Enhanced tables */
-.vp-doc table {
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: var(--vp-shadow-1);
-  margin: 1.5rem 0;
-}
-
-.vp-doc th {
-  background: var(--vp-c-bg-soft);
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-}
-
-.vp-doc tr:hover {
-  background: var(--vp-c-bg-soft);
-}
-
-/* Enhanced outline (right sidebar) */
-.VPDocAsideOutline .outline-marker {
-  background-color: var(--vp-c-brand-1);
-  opacity: 0.8;
-}
-
-.VPDocAsideOutline .outline-link:hover {
-  color: var(--vp-c-brand-1);
-  transition: color 0.2s ease;
-}
-
-.VPDocAsideOutline .outline-link.active {
-  color: var(--vp-c-brand-1);
-  font-weight: 600;
-}
-
-/* Enhanced footer */
-.VPFooter {
-  background: var(--vp-c-bg-soft);
-  border-top: 1px solid var(--vp-c-divider);
-  margin-top: 3rem;
-  padding: 2rem 0;
-}
-
-/* Enhanced page navigation */
-.VPDocFooter {
-  margin-top: 3rem;
-  padding: 2rem 0;
-  border-top: 1px solid var(--vp-c-divider);
-}
-
-.VPDocFooter .pager-link {
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-divider);
-  transition: all 0.2s ease;
-  box-shadow: var(--vp-shadow-1);
-}
-
-.VPDocFooter .pager-link:hover {
-  border-color: var(--vp-c-brand-1);
-  box-shadow: var(--vp-shadow-2);
-  transform: translateY(-1px);
-}
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-  .vp-code-group,
-  div[class*="language-"],
-  .custom-block,
-  .vp-doc table {
-    margin: 1rem 0;
-  }
-}
-
-/* Print styles */
-@media print {
-  .VPNav,
-  .VPSidebar,
-  .VPDocAside {
-    display: none;
-  }
-  
-  .VPContent {
-    padding: 0;
-  }
-  
-  .VPDoc {
-    padding: 1rem;
-  }
-}
-
-/* Accessibility enhancements */
 @media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none;
-    animation: none;
-  }
-}
-
-/* Focus indicators */
-.VPSidebarItem .link:focus-visible,
-.VPNavBarMenuLink:focus-visible,
-.breadcrumb-link:focus-visible {
-  outline: 2px solid var(--vp-c-brand-1);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  :root {
-    --vp-c-brand-1: #0000ff;
-    --vp-c-brand-2: #0000cc;
-    --vp-c-brand-3: #000099;
-  }
-  
-  .dark {
-    --vp-c-brand-1: #66b3ff;
-    --vp-c-brand-2: #4da6ff;
-    --vp-c-brand-3: #3399ff;
+  html {
+    scroll-behavior: auto;
   }
 }
